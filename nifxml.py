@@ -847,7 +847,8 @@ class Member:
             elif self.type == "string" or self.type == "IndexString":
                 self.default = "\"" + self.default + "\""
             elif self.type == "float":
-                self.default += "f"
+                # Cast to float then back to string to add any missing ".0"
+                self.default = str(float(self.default)) + "f"
             elif self.type in ["Ref", "Ptr", "bool", "Vector3"]:
                 pass
             elif self.default.find(',') != -1:
