@@ -55,6 +55,25 @@
 #
 # ***** END LICENSE BLOCK *****
 # --------------------------------------------------------------------------
+"""
+@var ACTION_READ: Constant for use with CFile::stream. Causes it to generate Niflib's Read function.
+@type ACTION_READ: C{int}
+
+@var ACTION_WRITE: Constant for use with CFile::stream.  Causes it to generate Niflib's Write function.
+@type ACTION_WRITE: C{int}
+
+@var ACTION_OUT: Constant for use with CFile::stream.  Causes it to generate Niflib's asString function.
+@type ACTION_OUT: C{int}
+
+@var ACTION_FIXLINKS: Constant for use with CFile::stream.  Causes it to generate Niflib's FixLinks function.
+@type ACTION_FIXLINKS: C{int}
+
+@var ACTION_GETREFS: Constant for use with CFile::stream.  Causes it to generate Niflib's GetRefs function.
+@type ACTION_GETREFS: C{int}
+
+@var ACTION_GETPTRS: Constant for use with CFile::stream.  Causes it to generate Niflib's GetPtrs function.
+@type ACTION_GETPTRS: C{int}
+"""
 
 from __future__ import unicode_literals
 from nifxml import *
@@ -95,6 +114,505 @@ for i in sys.argv:
 # Fix known manual update attributes. For now hard code here.
 block_types["NiKeyframeData"].find_member("Num Rotation Keys").is_manual_update = True
 #block_types["NiTriStripsData"].find_member("Num Triangles").is_manual_update = True
+
+
+ACTION_READ = 0
+ACTION_WRITE = 1
+ACTION_OUT = 2
+ACTION_FIXLINKS = 3
+ACTION_GETREFS = 4
+ACTION_GETPTRS = 5
+
+
+#
+# C++ code formatting functions
+#
+
+class CFile(io.TextIOWrapper):
+    """
+    This class represents a C++ source file.  It is used to open the file for output
+    and automatically handles indentation by detecting brackets and colons.
+    It also handles writing the generated Niflib C++ code.
+    @ivar indent: The current level of indentation.
+    @type indent: int
+    @ivar backslash_mode: Determines whether a backslash is appended to each line for creation of multi-line defines
+    @type backslash_mode: bool
+    """
+    def __init__(self, buffer, encoding='utf-8', errors=None, newline=None, line_buffering=False, write_through=False):
+        io.TextIOWrapper.__init__(self, buffer, encoding, errors, newline, line_buffering)
+        self.indent = 0
+        self.backslash_mode = False
+    
+
+    def code(self, txt = None):
+        r"""
+        Formats a line of C++ code; the returned result always ends with a newline.
+        If txt starts with "E{rb}", indent is decreased, if it ends with "E{lb}", indent is increased.
+        Text ending in "E{:}" de-indents itself.  For example "publicE{:}"
+        Result always ends with a newline
+        @param txt: None means just a line break.  This will also break the backslash, which is kind of handy.
+            "\n" will create a backslashed newline in backslash mode.
+        @type txt: string, None
+        """
+        # txt 
+        # this will also break the backslash, which is kind of handy
+        # call code("\n") if you want a backslashed newline in backslash mode
+        if txt == None:
+            self.write("\n")
+            return
+    
+        # block end
+        if txt[:1] == "}": self.indent -= 1
+        # special, private:, public:, and protected:
+        if txt[-1:] == ":": self.indent -= 1
+        # endline string
+        if self.backslash_mode:
+            endl = " \\\n"
+        else:
+            endl = "\n"
+        # indent string
+        prefix = "\t" * self.indent
+        # strip trailing whitespace, including newlines
+        txt = txt.rstrip()
+        # indent, and add newline
+        result = prefix + txt.replace("\n", endl + prefix) + endl
+        # block start
+        if txt[-1:] == "{": self.indent += 1
+        # special, private:, public:, and protected:
+        if txt[-1:] == ":": self.indent += 1
+        
+        self.write(result.encode('utf-8').decode('utf-8', 'strict'))
+    
+    
+    # 
+    def comment(self, txt, doxygen = True):
+        """
+        Wraps text in C++ comments and outputs it to the file.  Handles multilined comments as well.
+        Result always ends with a newline
+        @param txt: The text to enclose in a Doxygen comment
+        @type txt: string
+        """
+
+        # skip comments when we are in backslash mode
+        if self.backslash_mode: return
+        
+        lines = txt.split( '\n' )
+
+        txt = ""
+        for l in lines:
+            txt = txt + fill(l, 80) + "\n"
+
+        txt = txt.strip()
+        
+        num_line_ends = txt.count( '\n' )
+        
+
+        if doxygen:
+            if num_line_ends > 0:
+                txt = txt.replace("\n", "\n * ")
+                self.code("/*!\n * " + txt + "\n */")  
+            else:
+                self.code("/*! " + txt + " */" )
+        else:
+            lines = txt.split('\n')
+            for l in lines:
+                self.code( "// " + l )
+    
+    def declare(self, block):
+        """
+        Formats the member variables for a specific class as described by the XML and outputs the result to the file.
+        @param block: The class or struct to generate member functions for.
+        @type block: Block, Compound
+        """
+        if isinstance(block, Block):
+            #self.code('protected:')
+            prot_mode = True
+        for y in block.members:
+            if not y.is_duplicate:
+                if isinstance(block, Block):
+                    if y.is_public and prot_mode:
+                        self.code('public:')
+                        prot_mode = False
+                    elif not y.is_public and not prot_mode:
+                        self.code('protected:')
+                        prot_mode = True
+                self.comment(y.description)
+                self.code(y.code_declare())
+                if y.func:
+                  self.comment(y.description)
+                  self.code("%s %s() const;"%(y.ctype,y.func))
+
+    def stream(self, block, action, localprefix = "", prefix = "", arg_prefix = "", arg_member = None):
+        """
+        Generates the function code for various functions in Niflib and outputs it to the file.
+        @param block: The class or struct to generate the function for.
+        @type block: Block, Compound
+        @param action: The type of function to generate, valid values are::
+            ACTION_READ - Read function.
+            ACTION_WRITE - Write function
+            ACTION_OUT - asString function
+            ACTION_FIXLINKS - FixLinks function
+            ACTION_GETREFS - GetRefs function
+            ACTION_GETPTRS - GetPtrs function
+        @type action: ACTION_X constant
+        @param localprefix: ?
+        @type localprefix: string
+        @param prefix: ?
+        @type prefix: string
+        @param arg_prefix: ?
+        @type arg_prefix: string
+        @param arg_member: ?
+        @type arg_member: None, ?
+        """
+        lastver1 = None
+        lastver2 = None
+        lastuserver = None
+        lastuserver2 = None
+        lastcond = None
+        lastvercond = None
+        # stream name
+        if action == ACTION_READ:
+            stream = "in"
+        else:
+            stream = "out"
+        
+
+        # preperation
+        if isinstance(block, Block) or block.name in ["Footer", "Header"]:
+            if action == ACTION_READ:
+                if block.has_links or block.has_crossrefs:
+                    self.code("unsigned int block_num;")
+            if action == ACTION_OUT:
+                self.code("stringstream out;")
+                # declare array_output_count, only if it will actually be used
+                if block.has_arr():
+                    self.code("unsigned int array_output_count = 0;")
+
+            if action == ACTION_GETREFS:
+                self.code("list<Ref<NiObject> > refs;")
+            if action == ACTION_GETPTRS:
+                self.code("list<NiObject *> ptrs;")
+
+        # stream the ancestor
+        if isinstance(block, Block):
+            if block.inherit:
+                if action == ACTION_READ:
+                    self.code("%s::Read( %s, link_stack, info );"%(block.inherit.cname, stream))
+                elif action == ACTION_WRITE:
+                    self.code("%s::Write( %s, link_map, missing_link_stack, info );"%(block.inherit.cname, stream))
+                elif action == ACTION_OUT:
+                    self.code("%s << %s::asString();"%(stream, block.inherit.cname))
+                elif action == ACTION_FIXLINKS:
+                    self.code("%s::FixLinks( objects, link_stack, missing_link_stack, info );"%block.inherit.cname)
+                elif action == ACTION_GETREFS:
+                    self.code("refs = %s::GetRefs();"%block.inherit.cname)
+                elif action == ACTION_GETPTRS:
+                    self.code("ptrs = %s::GetPtrs();"%block.inherit.cname)
+
+        # declare and calculate local variables (TODO: GET RID OF THIS; PREFERABLY NO LOCAL VARIABLES AT ALL)
+        if action in [ACTION_READ, ACTION_WRITE, ACTION_OUT]:
+            block.members.reverse() # calculated data depends on data further down the structure
+            for y in block.members:
+                if not y.is_duplicate and not y.is_manual_update and action in [ACTION_WRITE, ACTION_OUT]:
+                  if y.func:
+                      self.code('%s%s = %s%s();'%(prefix, y.cname, prefix, y.func))
+                  elif y.is_calculated:
+                      if action in [ACTION_READ, ACTION_WRITE]:
+                          self.code('%s%s = %s%sCalc(info);'%(prefix, y.cname, prefix, y.cname))
+                      # ACTION_OUT is in asString(), which doesn't take version info
+                      # so let's simply not print the field in this case
+                  elif y.arr1_ref:
+                    if not y.arr1 or not y.arr1.lhs: # Simple Scalar
+                      cref = block.find_member(y.arr1_ref[0], True) 
+                      # if not cref.is_duplicate and not cref.next_dup and (not cref.cond.lhs or cref.cond.lhs == y.name):
+                        # self.code('assert(%s%s == (%s)(%s%s.size()));'%(prefix, y.cname, y.ctype, prefix, cref.cname))
+                      self.code('%s%s = (%s)(%s%s.size());'%(prefix, y.cname, y.ctype, prefix, cref.cname))
+                  elif y.arr2_ref: # 1-dimensional dynamic array
+                    cref = block.find_member(y.arr2_ref[0], True) 
+                    if not y.arr1 or not y.arr1.lhs: # Second dimension
+                      # if not cref.is_duplicate and not cref.next_dup (not cref.cond.lhs or cref.cond.lhs == y.name):
+                       # self.code('assert(%s%s == (%s)((%s%s.size() > 0) ? %s%s[0].size() : 0));'%(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
+                      self.code('%s%s = (%s)((%s%s.size() > 0) ? %s%s[0].size() : 0);'%(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
+                    else:
+                        # index of dynamically sized array
+                        self.code('for (unsigned int i%i = 0; i%i < %s%s.size(); i%i++)'%(self.indent, self.indent, prefix, cref.cname, self.indent))
+                        self.code('\t%s%s[i%i] = (%s)(%s%s[i%i].size());'%(prefix, y.cname, self.indent, y.ctype, prefix, cref.cname, self.indent))
+                  # else: #has duplicates needs to be selective based on version
+                    # self.code('assert(!"%s");'%(y.name))
+            block.members.reverse() # undo reverse
+
+
+        # now comes the difficult part: processing all members recursively
+        for y in block.members:
+            # get block
+            if y.type in basic_types:
+                subblock = basic_types[y.type]
+            elif y.type in compound_types:
+                subblock = compound_types[y.type]
+            elif y.type in enum_types:
+                subblock = enum_types[y.type]
+            elif y.type in flag_types:
+                subblock = flag_types[y.type]
+                
+            # check for links
+            if action in [ACTION_FIXLINKS, ACTION_GETREFS, ACTION_GETPTRS]:
+                if not subblock.has_links and not subblock.has_crossrefs:
+                    continue # contains no links, so skip this member!
+            if action == ACTION_OUT:
+                if y.is_duplicate:
+                    continue # don't write variables twice
+            # resolve array & cond references
+            y_arr1_lmember = None
+            y_arr2_lmember = None
+            y_cond_lmember = None
+            y_arg = None
+            y_arr1_prefix = ""
+            y_arr2_prefix = ""
+            y_cond_prefix = ""
+            y_arg_prefix = ""
+            if y.arr1.lhs or y.arr2.lhs or y.cond.lhs or y.arg:
+                for z in block.members:
+                    if not y_arr1_lmember and y.arr1.lhs == z.name:
+                        y_arr1_lmember = z
+                    if not y_arr2_lmember and y.arr2.lhs == z.name:
+                        y_arr2_lmember = z
+                    if not y_cond_lmember:
+                       if y.cond.lhs == z.name:
+                          y_cond_lmember = z
+                       elif y.cond.op == '&&' and y.cond.lhs == z.name:
+                          y_cond_lmember = z
+                       elif y.cond.op == '||' and y.cond.lhs == z.name:
+                          y_cond_lmember = z
+                    if not y_arg and y.arg == z.name:
+                        y_arg = z
+                if y_arr1_lmember:
+                    y_arr1_prefix = prefix
+                if y_arr2_lmember:
+                    y_arr2_prefix = prefix
+                if y_cond_lmember:
+                    y_cond_prefix = prefix
+                if y_arg:
+                    y_arg_prefix = prefix
+            # resolve this prefix
+            y_prefix = prefix
+            # resolve arguments
+            if y.arr1 and y.arr1.lhs == 'ARG':
+                y.arr1.lhs = arg_member.name
+                y.arr1.clhs = arg_member.cname
+                y_arr1_prefix = arg_prefix
+            if y.arr2 and y.arr2.lhs == 'ARG':
+                y.arr2.lhs = arg_member.name
+                y.arr2.clhs = arg_member.cname
+                y_arr2_prefix = arg_prefix
+            if y.cond and y.cond.lhs == 'ARG':
+                y.cond.lhs = arg_member.name
+                y.cond.clhs = arg_member.cname
+                y_cond_prefix = arg_prefix
+            # conditioning
+            y_cond = y.cond.code(y_cond_prefix)
+            y_vercond = y.vercond.code('info.')
+            if action in [ACTION_READ, ACTION_WRITE, ACTION_FIXLINKS]:
+                if lastver1 != y.ver1 or lastver2 != y.ver2 or lastuserver != y.userver or lastuserver2 != y.userver2 or lastvercond != y_vercond:
+                    # we must switch to a new version block    
+                    # close old version block
+                    if lastver1 or lastver2 or lastuserver or lastuserver2 or lastvercond: self.code("};")
+                    # close old condition block as well    
+                    if lastcond:
+                        self.code("};")
+                        lastcond = None
+                    # start new version block
+                    
+                    concat = ''
+                    verexpr = ''
+                    if y.ver1:
+                        verexpr = "( info.version >= 0x%08X )"%y.ver1
+                        concat = " && "
+                    if y.ver2:
+                        verexpr = "%s%s( info.version <= 0x%08X )"%(verexpr, concat, y.ver2)
+                        concat = " && "
+                    if y.userver != None:
+                        verexpr = "%s%s( info.userVersion == %s )"%(verexpr, concat, y.userver)
+                        concat = " && "
+                    if y.userver2 != None:
+                        verexpr = "%s%s( info.userVersion2 == %s )"%(verexpr, concat, y.userver2)
+                        concat = " && "
+                    if y_vercond:
+                        verexpr = "%s%s( %s )"%(verexpr, concat, y_vercond)
+                    if verexpr:
+                        # remove outer redundant parenthesis 
+                        bleft, bright = scanBrackets(verexpr)
+                        if bleft == 0 and bright == (len(verexpr) - 1):
+                            self.code("if %s {"%verexpr)
+                        else:
+                            self.code("if ( %s ) {"%verexpr)
+                    
+                    # start new condition block
+                    if lastcond != y_cond and y_cond:
+                        self.code("if ( %s ) {"%y_cond)
+                else:
+                    # we remain in the same version block    
+                    # check condition block
+                    if lastcond != y_cond:
+                        if lastcond:
+                            self.code("};")
+                        if y_cond:
+                            self.code("if ( %s ) {"%y_cond)
+            elif action == ACTION_OUT:
+                # check condition block
+                if lastcond != y_cond:
+                    if lastcond:
+                        self.code("};")
+                    if y_cond:
+                        self.code("if ( %s ) {"%y_cond)
+    
+            # loop over arrays
+            # and resolve variable name
+            if not y.arr1.lhs:
+                z = "%s%s"%(y_prefix, y.cname)
+            else:
+                if action == ACTION_OUT:
+                    self.code("array_output_count = 0;")
+                if y.arr1.lhs.isdigit() == False:
+                    if action == ACTION_READ:
+                      # default to local variable, check if variable is in current scope if not then try to use
+                      #   definition from resized child
+                      memcode = "%s%s.resize(%s);"%(y_prefix, y.cname, y.arr1.code(y_arr1_prefix))
+                      mem = block.find_member(y.arr1.lhs, True) # find member in self or parents
+                      self.code(memcode)
+                      
+                    self.code(\
+                        "for (unsigned int i%i = 0; i%i < %s%s.size(); i%i++) {"%(self.indent, self.indent, y_prefix, y.cname, self.indent))
+                else:
+                    self.code(\
+                        "for (unsigned int i%i = 0; i%i < %s; i%i++) {"\
+                        %(self.indent, self.indent, y.arr1.code(y_arr1_prefix), self.indent))
+                if action == ACTION_OUT:
+                        self.code('if ( !verbose && ( array_output_count > MAXARRAYDUMP ) ) {')
+                        self.code('%s << "<Data Truncated. Use verbose mode to see complete listing.>" << endl;'%stream)
+                        self.code('break;')
+                        self.code('};')
+                        
+                if not y.arr2.lhs:
+                    z = "%s%s[i%i]"%(y_prefix, y.cname, self.indent-1)
+                else:
+                    if not y.arr2_dynamic:
+                        if y.arr2.lhs.isdigit() == False:
+                            if action == ACTION_READ:
+                                self.code("%s%s[i%i].resize(%s);"%(y_prefix, y.cname, self.indent-1, y.arr2.code(y_arr2_prefix)))
+                            self.code(\
+                                "for (unsigned int i%i = 0; i%i < %s%s[i%i].size(); i%i++) {"\
+                                %(self.indent, self.indent, y_prefix, y.cname, self.indent-1, self.indent))
+                        else:
+                            self.code(\
+                                "for (unsigned int i%i = 0; i%i < %s; i%i++) {"\
+                                %(self.indent, self.indent, y.arr2.code(y_arr2_prefix), self.indent))
+                    else:
+                        if action == ACTION_READ:
+                            self.code("%s%s[i%i].resize(%s[i%i]);"%(y_prefix, y.cname, self.indent-1, y.arr2.code(y_arr2_prefix), self.indent-1))
+                        self.code(\
+                            "for (unsigned int i%i = 0; i%i < %s[i%i]; i%i++) {"\
+                            %(self.indent, self.indent, y.arr2.code(y_arr2_prefix), self.indent-1, self.indent))
+                    z = "%s%s[i%i][i%i]"%(y_prefix, y.cname, self.indent-2, self.indent-1)
+    
+            if y.type in native_types:
+                # these actions distinguish between refs and non-refs
+                if action in [ACTION_READ, ACTION_WRITE, ACTION_FIXLINKS, ACTION_GETREFS, ACTION_GETPTRS]:
+                    if (not subblock.is_link) and (not subblock.is_crossref):
+                        # not a ref
+                        if action in [ACTION_READ, ACTION_WRITE] and y.is_abstract is False:
+                            # hack required for vector<bool>
+                            if y.type == "bool" and y.arr1.lhs:
+                                self.code("{");
+                                if action == ACTION_READ:
+                                    self.code("bool tmp;")
+                                    self.code("NifStream( tmp, %s, info );"%(stream))
+                                    self.code("%s = tmp;" % z)
+                                else: # ACTION_WRITE
+                                    self.code("bool tmp = %s;" % z)
+                                    self.code("NifStream( tmp, %s, info );"%(stream))
+                                self.code("};")
+                            # the usual thing
+                            elif not y.arg:
+                                cast = ""
+                                if ( y.is_duplicate ):
+                                    cast = "(%s&)" % y.ctype
+                                self.code("NifStream( %s%s, %s, info );"%(cast, z, stream))
+                            else:
+                                self.code("NifStream( %s, %s, info, %s%s );"%(z, stream, y_prefix, y.carg))
+                    else:
+                        # a ref
+                        if action == ACTION_READ:
+                            self.code("NifStream( block_num, %s, info );"%stream)
+                            self.code("link_stack.push_back( block_num );")
+                        elif action == ACTION_WRITE:
+                            self.code("WriteRef( StaticCast<NiObject>(%s), %s, info, link_map, missing_link_stack );" % (z, stream))
+                        elif action == ACTION_FIXLINKS:
+                            self.code("%s = FixLink<%s>( objects, link_stack, missing_link_stack, info );"%(z,y.ctemplate))
+                                
+                        elif action == ACTION_GETREFS and subblock.is_link:
+                            if not y.is_duplicate:
+                                self.code('if ( %s != NULL )\n\trefs.push_back(StaticCast<NiObject>(%s));'%(z,z))
+                        elif action == ACTION_GETPTRS and subblock.is_crossref:
+                            if not y.is_duplicate:
+                                self.code('if ( %s != NULL )\n\tptrs.push_back((NiObject *)(%s));'%(z,z))
+                # the following actions don't distinguish between refs and non-refs
+                elif action == ACTION_OUT:
+                    if not y.arr1.lhs:
+                        self.code('%s << "%*s%s:  " << %s << endl;'%(stream, 2*self.indent, "", y.name, z))
+                    else:
+                        self.code('if ( !verbose && ( array_output_count > MAXARRAYDUMP ) ) {')
+                        self.code('break;')
+                        self.code('};')
+                        self.code('%s << "%*s%s[" << i%i << "]:  " << %s << endl;'%(stream, 2*self.indent, "", y.name, self.indent-1, z))
+                        self.code('array_output_count++;')
+            else:
+                subblock = compound_types[y.type]
+                if not y.arr1.lhs:
+                    self.stream(subblock, action, "%s%s_"%(localprefix, y.cname), "%s."%z, y_arg_prefix,  y_arg)
+                elif not y.arr2.lhs:
+                    self.stream(subblock, action, "%s%s_"%(localprefix, y.cname), "%s."%z, y_arg_prefix, y_arg)
+                else:
+                    self.stream(subblock, action, "%s%s_"%(localprefix, y.cname), "%s."%z, y_arg_prefix, y_arg)
+
+            # close array loops
+            if y.arr1.lhs:
+                self.code("};")
+                if y.arr2.lhs:
+                    self.code("};")
+
+            lastver1 = y.ver1
+            lastver2 = y.ver2
+            lastuserver = y.userver
+            lastuserver2 = y.userver2
+            lastcond = y_cond
+            lastvercond = y_vercond
+
+        if action in [ACTION_READ, ACTION_WRITE, ACTION_FIXLINKS]:
+            if lastver1 or lastver2 or not(lastuserver is None) or not(lastuserver2 is None) or lastvercond:
+                self.code("};")
+        if action in [ACTION_READ, ACTION_WRITE, ACTION_FIXLINKS, ACTION_OUT]:
+            if lastcond:
+                self.code("};")
+
+        # the end
+        if isinstance(block, Block) or block.name in ["Header", "Footer"]:
+            if action == ACTION_OUT:
+                self.code("return out.str();")
+            if action == ACTION_GETREFS:
+                self.code("return refs;")
+            if action == ACTION_GETPTRS:
+                self.code("return ptrs;")
+
+    # declaration
+    # print "$t Get$n() const; \nvoid Set$n($t value);\n\n";
+    def getset_declare(self, block, prefix = ""): # prefix is used to tag local variables only
+      for y in block.members:
+        if not y.func:
+          if y.cname.lower().find("unk") == -1:
+            self.code( y.getter_declare("", ";") )
+            self.code( y.setter_declare("", ";") )
+            self.code()
+
 
 #
 # Function to extract custom code from existing file
