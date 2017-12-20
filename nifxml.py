@@ -72,10 +72,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import unicode_literals
 
-from xml.dom.minidom import *
-from textwrap import fill
+from xml.dom.minidom import Node, parse
 
-import sys
 import os
 import io
 import re
@@ -157,26 +155,27 @@ class Template:
     is processed.
     """
     def __init__(self):
-        #Initialize variable dictionary
+        """Initialize variable dictionary"""
         self.vars = {}
-        
+
     def set_var(self, var_name, value):
+        """Set data in variable dictionary"""
         self.vars[var_name] = value
 
     def parse(self, file_name):
-        #Open file and read contents to txt variable
+        """Open file and read contents to txt variable"""
         f = io.open(file_name, 'rt', 1, 'utf-8')
         txt = f.read()
         f.close()
 
         #Loop through all variables, replacing them in the template text
         for i in self.vars:
-            txt = txt.replace( '{' + i + '}', self.vars[i].encode('utf-8').decode('utf-8', 'strict') )
+            txt = txt.replace('{' + i + '}', self.vars[i].encode('utf-8').decode('utf-8', 'strict'))
 
         #return result
         return txt
 
-def class_name(n):
+def class_name(name_in):
     """
     Formats a valid C++ class name from the name format used in the XML.
     @param n: The class name to format in C++ style.
@@ -184,30 +183,34 @@ def class_name(n):
     @return The resulting valid C++ class name
     @rtype: string
     """
-    if n == None: return None
+    if name_in is None:
+        return None
     try:
-        return native_types[n]
+        return native_types[name_in]
     except KeyError:
-        return n.replace(' ', '_').replace(":", "_")
+        return name_in.replace(' ', '_').replace(":", "_")
 
-    if n == None: return None
+    if name_in is None:
+        return None
     try:
-        return native_types[n]
+        return native_types[name_in]
     except KeyError:
         pass
-    if n == 'TEMPLATE': return 'T'
-    n2 = ''
-    for i, c in enumerate(n):
-        if ('A' <= c) and (c <= 'Z'):
-            if i > 0: n2 += '_'
-            n2 += c.lower()
-        elif (('a' <= c) and (c <= 'z')) or (('0' <= c) and (c <= '9')):
-            n2 += c
+    if name_in == 'TEMPLATE':
+        return 'T'
+    name_out = ''
+    for i, char in enumerate(name_in):
+        if char.isupper():
+            if i > 0:
+                name_out += '_'
+            name_out += char.lower()
+        elif char.islower() or char.isdigit():
+            name_out += char
         else:
-            n2 += '_'
-    return n2
+            name_out += '_'
+    return name_out
 
-def define_name(n):
+def define_name(name_in):
     """
     Formats an all-uppercase version of the name for use in C++ defines.
     @param n: The class name to format in define style.
@@ -215,48 +218,48 @@ def define_name(n):
     @return The resulting valid C++ define name
     @rtype: string
     """
-    n2 = ''
-    for i, c in enumerate(n):
-        if ('A' <= c) and (c <= 'Z'):
+    name_out = ''
+    for i, char in enumerate(name_in):
+        if char.isupper():
             if i > 0:
-                n2 += '_'
-                n2 += c
+                name_out += '_'
+                name_out += char
             else:
-                n2 += c
-        elif (('a' <= c) and (c <= 'z')) or (('0' <= c) and (c <= '9')):
-            n2 += c.upper()
+                name_out += char
+        elif char.islower() or char.isdigit():
+            name_out += char.upper()
         else:
-            n2 += '_'
-    return n2
+            name_out += '_'
+    return name_out
 
-def member_name(n):
+def member_name(name_in):
     """
     Formats a version of the name for use as a C++ member variable.
-    @param n: The attribute name to format in variable style.
-    @type n: string
+    @param name_in: The attribute name to format in variable style.
+    @type name_in: string
     @return The resulting valid C++ variable name
     @rtype: string
     """
-    if n == None: return None
-    if n == 'ARG': return 'ARG'
-    n2 = ''
+    if name_in is None or name_in == 'ARG':
+        return name_in
+    name_out = ''
     lower = True
-    for i, c in enumerate(n):
-        if c == ' ':
+    for char in name_in:
+        if char == ' ':
             lower = False
-        elif (('A' <= c) and (c <= 'Z')) or (('a' <= c) and (c <= 'z')) or (('0' <= c) and (c <= '9')):
+        elif char.isalnum():
             if lower:
-                n2 += c.lower()
+                name_out += char.lower()
             else:
-                n2 += c.upper()
+                name_out += char.upper()
                 lower = True
-        elif c == '\\': # arg member access operator
-            n2 += '.'
+        elif char == '\\': # arg member access operator
+            name_out += '.'
         else:
-            n2 += '_'
+            name_out += '_'
             lower = True
-    return n2
-    
+    return name_out
+
 def version2number(s):
     """
     Translates a legible NIF version number to the packed-byte numeric representation. For example, "10.0.1.0" is translated to 0x0A000100.
@@ -265,12 +268,12 @@ def version2number(s):
     @return The resulting numeric version of the given version string.
     @rtype: int
     """
-    if not s: return None
+    if not s:
+        return None
     l = s.split('.')
     if len(l) > 4:
-        assert(False)
+        assert False
         return int(s)
-    
     if len(l) == 2:
         version = 0
         version += int(l[0]) << (3 * 8)
@@ -283,11 +286,10 @@ def version2number(s):
         return version
     else:
         version = 0
-        for i in range( 0, len(l) ):
+        for i in range(0, len(l)):
             version += int(l[i]) << ((3-i) * 8)
             #return (int(l[0]) << 24) + (int(l[1]) << 16) + (int(l[2]) << 8) + int(l[3])
         return version
-    
 
 def userversion2number(s):
     """
@@ -299,10 +301,11 @@ def userversion2number(s):
     @return The resulting numeric version of the given version string.
     @rtype: int
     """
-    if not s: return None
+    if not s:
+        return None
     return int(s)
 
-def scanBrackets(expr_str, fromIndex = 0):
+def scanBrackets(expr_str, fromIndex=0):
     """Looks for matching brackets.
 
     >>> scanBrackets('abcde')
@@ -334,7 +337,7 @@ def scanBrackets(expr_str, fromIndex = 0):
         if startpos != -1 or endpos != -1:
             raise ValueError("expression syntax error (non-matching brackets?)")
     return (startpos, endpos)
-    
+
 class Expression(object):
     """This class represents an expression.
 
@@ -363,8 +366,8 @@ class Expression(object):
     >>> bool(Expression('1 != 1').eval())
     False
     """
-    operators = [ '==', '!=', '>=', '<=', '&&', '||', '&', '|', '-', '+', '>', '<', '/', '*' ]
-    def __init__(self, expr_str, name_filter = None):
+    operators = ['==', '!=', '>=', '<=', '&&', '||', '&', '|', '-', '+', '>', '<', '/', '*']
+    def __init__(self, expr_str, name_filter=None):
         self._code = expr_str
         left, self._op, right = self._partition(expr_str)
         self._left = self._parse(left, name_filter)
@@ -373,15 +376,15 @@ class Expression(object):
         else:
             self._right = ''
 
-    def eval(self, data = None):
+    def eval(self, data=None):
         """Evaluate the expression to an integer."""
 
         if isinstance(self._left, Expression):
             left = self._left.eval(data)
-        elif isinstance(self._left, basestring):
+        elif isinstance(self._left, str):
             left = getattr(data, self._left) if self._left != '""' else ""
         else:
-            assert(isinstance(self._left, int)) # debug
+            assert isinstance(self._left, int) # debug
             left = self._left
 
         if not self._op:
@@ -389,10 +392,10 @@ class Expression(object):
 
         if isinstance(self._right, Expression):
             right = self._right.eval(data)
-        elif isinstance(self._right, basestring):
+        elif isinstance(self._right, str):
             right = getattr(data, self._right) if self._right != '""' else ""
         else:
-            assert(isinstance(self._right, int)) # debug
+            assert isinstance(self._right, int) # debug
             right = self._right
 
         if self._op == '==':
@@ -422,13 +425,14 @@ class Expression(object):
         elif self._op == '!':
             return not left
         else:
-            raise NotImplementedError("expression syntax error: operator '" + op + "' not implemented")
+            raise NotImplementedError("expression syntax error: operator '" + self._op + "' not implemented")
 
     def __str__(self):
         """Reconstruct the expression to a string."""
 
         left = str(self._left)
-        if not self._op: return left
+        if not self._op:
+            return left
         right = str(self._right)
         return left + ' ' + self._op + ' ' + right
 
@@ -440,7 +444,7 @@ class Expression(object):
         return self.__str__().encode(encoding)
 
     @classmethod
-    def _parse(cls, expr_str, name_filter = None):
+    def _parse(cls, expr_str, name_filter=None):
         """Returns an Expression, string, or int, depending on the
         contents of <expr_str>."""
         # brackets or operators => expression
@@ -449,7 +453,7 @@ class Expression(object):
         for op in cls.operators:
             if expr_str.find(op) != -1:
                 return Expression(expr_str, name_filter)
-                
+
         mver = re.compile("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+")
         iver = re.compile("[0-9]+")
         # try to convert it to an integer
@@ -482,7 +486,7 @@ class Expression(object):
         >>> Expression._partition('(a== b) &&(( b!=c)||d )')
         ('a== b', '&&', '( b!=c)||d')
         """
-        # check for unary operators 
+        # check for unary operators
         if expr_str.strip().startswith('!'):
             return expr_str.lstrip(' !'), '!', None
         lenstr = len(expr_str)
@@ -495,7 +499,7 @@ class Expression(object):
             # so remove brackets and whitespace,
             # and let that be the left hand side
             left_str = expr_str[left_startpos+1:left_endpos].strip()
-            
+
             # the next token should be the operator
             # find the position where the operator should start
             op_startpos = left_endpos+1
@@ -516,7 +520,8 @@ class Expression(object):
         else:
             # it's not... so we need to scan for the first operator
             for op_startpos, ch in enumerate(expr_str):
-                if ch == ' ': continue
+                if ch == ' ':
+                    continue
                 if ch == '(' or ch == ')':
                     raise ValueError("expression syntax error: expected operator before '%s'"%expr_str[op_startpos:])
                 # to avoid confusion between && and &, and || and |,
@@ -536,11 +541,11 @@ class Expression(object):
                 return left_str, op_str, right_str
             # operator found! now get the left hand side
             left_str = expr_str[:op_startpos].strip()
-            
+
         return left_str, op_str, expr_str[op_endpos+1:].strip()
 
     @staticmethod
-    def _scanBrackets(expr_str, fromIndex = 0):
+    def _scanBrackets(expr_str, fromIndex=0):
         """Looks for matching brackets.
 
         >>> Expression._scanBrackets('abcde')
@@ -572,8 +577,8 @@ class Expression(object):
             if startpos != -1 or endpos != -1:
                 raise ValueError("expression syntax error (non-matching brackets?)")
         return (startpos, endpos)
-        
-    def code(self, prefix = '', brackets = True, name_filter = None):
+
+    def code(self, prefix='', brackets=True, name_filter=None):
         """Format an expression as a string.
         @param prefix: An optional prefix.
         @type prefix: string
@@ -585,9 +590,10 @@ class Expression(object):
         lbracket = "(" if brackets else ""
         rbracket = ")" if brackets else ""
         if not self._op:
-            if not self.lhs: return ''
+            if not self.lhs:
+                return ''
             if isinstance(self.lhs, int):
-                return self.lhs               
+                return self.lhs
             elif self.lhs in block_types:
                 return 'IsDerivedType(%s::TYPE)' % self.lhs
             else:
@@ -630,20 +636,20 @@ class Expression(object):
                 yield terminal
         elif self.rhs:
             yield self.rhs
-        
+
     def __getattr__(self, name):
-        if (name == 'lhs'):
+        if name == 'lhs':
             return getattr(self, '_left')
-        if (name == 'rhs'):
+        if name == 'rhs':
             return getattr(self, '_right')
-        if (name == 'op'):
+        if name == 'op':
             return getattr(self, '_op')
         return object.__getattribute__(self, name)
 
-    # ducktyping: pretend we're also a string with isdigit() method
     def isdigit(self):
+        """ducktyping: pretend we're also a string with isdigit() method"""
         return False
-        
+
 class Expr(Expression):
     """
     Represents a mathmatical expression?
@@ -656,19 +662,19 @@ class Expr(Expression):
     @ivar rhs: The right hand side of the expression?
     @type rhs: string
     """
-    def __init__(self, n, name_filter = None):
+    def __init__(self, n, name_filter=None):
         """
         This constructor takes the expression in the form of a string and tokenizes it into left-hand side, operator, right hand side, and something called clhs.
         @param n: The expression to tokenize.
         @type n: string
         """
         Expression.__init__(self, n, name_filter)
-        
-    def code(self, prefix = '', brackets = True, name_filter = None):
+
+    def code(self, prefix='', brackets=True, name_filter=None):
         if not name_filter:
             name_filter = member_name
         return Expression.code(self, prefix, brackets, name_filter)
-                        
+
 class Option:
     """
     This class represents an option in an option list.
@@ -688,10 +694,10 @@ class Option:
         assert element.tagName == 'option'
         parent = element.parentNode
         #sisters = parent.getElementsByTagName('option')
-        
+
         # member attributes
-        self.value     = element.getAttribute('value')
-        self.name      = element.getAttribute('name')
+        self.value = element.getAttribute('value')
+        self.name = element.getAttribute('name')
         if element.firstChild:
             assert element.firstChild.nodeType == Node.TEXT_NODE
             self.description = element.firstChild.nodeValue.strip()
@@ -701,7 +707,7 @@ class Option:
 
 class Member:
     """
-    This class represents a member variable?
+    This class represents the nif.xml <add> tag.
     @ivar name:  The name of this member variable.  Comes from the "name" attribute of the <add> tag.
     @type name: string
     @ivar type: The type of this member variable.  Comes from the "type" attribute of the <add> tag.
@@ -730,7 +736,7 @@ class Member:
     @ivar userver2: The user version 2 where this member exists.  Comes from the "userver2" attribute of the <add> tag.
     @type userver2: string
     @ivar vercond: The version condition of this member variable.  Comes from the "vercond" attribute of the <add> tag.
-    @type vercond: Eval    
+    @type vercond: Eval
     @ivar is_public: Whether this member will be declared public.  Comes from the "public" attribute of the <add> tag.
     @type is_public: string
     @ivar is_abstract: Whether this member is abstract.  This means that it does not factor into read/write.
@@ -774,7 +780,7 @@ class Member:
         """
         This constructor converts an XML <add> element into a Member object.
         Some sort of processing is applied to the various variables that are copied from the XML tag...
-        Seems to be trying to set reasonable defaults for certain types, and put things into C++ format generally. 
+        Seems to be trying to set reasonable defaults for certain types, and put things into C++ format generally.
         @param prefix: An optional prefix used in some situations?
         @type prefix: string
         @return The expression formatted into a string?
@@ -783,7 +789,7 @@ class Member:
         assert element.tagName == 'add'
         parent = element.parentNode
         sisters = parent.getElementsByTagName('add')
-        
+
         # member attributes
         self.name      = element.getAttribute('name')
         self.suffix    = element.getAttribute('suffix')
@@ -816,7 +822,7 @@ class Member:
             self.description = "Unknown."
         else:
             self.description = ""
-        
+
         # Format default value so that it can be used in a C++ initializer list
         if not self.default and (not self.arr1.lhs and not self.arr2.lhs):
             if self.type in ["unsigned int", "unsigned short", "byte", "int", "short", "char"]:
@@ -832,7 +838,7 @@ class Member:
             elif self.type == "Char8String":
                 pass
             elif self.type == "StringOffset":
-                self.default = "-1";
+                self.default = "-1"
             elif self.type in basic_names:
                 self.default = "0"
             elif self.type in flag_names or self.type in enum_names:
@@ -852,10 +858,10 @@ class Member:
             elif self.type in ["Ref", "Ptr", "bool", "Vector3"]:
                 pass
             elif self.default.find(',') != -1:
-                pass 
+                pass
             else:
                 self.default = "(%s)%s"%(class_name(self.type), self.default)
-        
+
         # calculate other stuff
         self.uses_argument = (self.cond.lhs == '(ARG)' or self.arr1.lhs == '(ARG)' or self.arr2.lhs == '(ARG)')
         self.type_is_native = self.name in native_types # true if the type is implemented natively
@@ -886,11 +892,11 @@ class Member:
                 sis_name = sis.getAttribute('name')
                 sis_arr1 = Expr(sis.getAttribute('arr1'))
                 sis_arr2 = Expr(sis.getAttribute('arr2'))
-                sis_cond = Expr(sis.getAttribute('cond'))               
+                sis_cond = Expr(sis.getAttribute('cond'))
                 if sis_arr1.lhs == self.name and (not sis_arr1.rhs or sis_arr1.rhs.isdigit()):
-                        self.arr1_ref.append(sis_name)
+                    self.arr1_ref.append(sis_name)
                 if sis_arr2.lhs == self.name and (not sis_arr2.rhs or sis_arr2.rhs.isdigit()):
-                        self.arr2_ref.append(sis_name)
+                    self.arr2_ref.append(sis_name)
                 if sis_cond.lhs == self.name:
                     self.cond_ref.append(sis_name)
             sis = sis.nextSibling
@@ -904,27 +910,32 @@ class Member:
         self.carr2_ref = [member_name(n) for n in self.arr2_ref]
         self.ccond_ref = [member_name(n) for n in self.cond_ref]
 
-    # construction
-    # don't construct anything that hasn't been declared
-    # don't construct if it has no default
     def code_construct(self):
+        """
+        Class construction
+        don't construct anything that hasn't been declared
+        don't construct if it has no default
+        """
         if self.default and not self.is_duplicate:
             return "%s(%s)"%(self.cname, self.default)
 
-    # declaration
-    def code_declare(self, prefix = ""): # prefix is used to tag local variables only
+    def code_declare(self, prefix=""):
+        """
+        Class member declaration
+        prefix is used to tag local variables only
+        """
         result = self.ctype
         suffix1 = ""
         suffix2 = ""
         keyword = ""
         if not self.is_duplicate: # is dimension for one or more arrays
-          if self.arr1_ref:
-            if not self.arr1 or not self.arr1.lhs: # Simple Scalar
-              keyword = "mutable "
-          elif self.arr2_ref: # 1-dimensional dynamic array
-              keyword = "mutable "
-          elif self.is_calculated:
-              keyword = "mutable "
+            if self.arr1_ref:
+                if not self.arr1 or not self.arr1.lhs: # Simple Scalar
+                    keyword = "mutable "
+            elif self.arr2_ref: # 1-dimensional dynamic array
+                keyword = "mutable "
+            elif self.is_calculated:
+                keyword = "mutable "
 
         if self.ctemplate:
             if result != "*":
@@ -934,9 +945,9 @@ class Member:
         if self.arr1.lhs:
             if self.arr1.lhs.isdigit():
                 if self.arr2.lhs and self.arr2.lhs.isdigit():
-                      result = "array< %s, array<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
+                    result = "array< %s, array<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
                 else:
-                      result = "array<%s,%s >"%(self.arr1.lhs, result) 
+                    result = "array<%s,%s >"%(self.arr1.lhs, result)
             else:
                 if self.arr2.lhs and self.arr2.lhs.isdigit():
                     result = "vector< array<%s,%s > >"%(self.arr2.lhs, result)
@@ -948,70 +959,73 @@ class Member:
         result = keyword + result + " " + prefix + self.cname + suffix1 + suffix2 + ";"
         return result
 
-    def getter_declare(self, scope = "", suffix = ""):
-      ltype = self.ctype
-      if self.ctemplate:
-          if ltype != "*":
-              ltype += "<%s >"%self.ctemplate
-          else:
-              ltype = "%s *"%self.ctemplate
-      if self.arr1.lhs:
-          if self.arr1.lhs.isdigit():
-              ltype = "array<%s,%s > "%(self.arr1.lhs, ltype)
-              # ltype = ltype
-          else:
-              if self.arr2.lhs and self.arr2.lhs.isdigit():
-                  ltype = "vector< array<%s,%s > >"%(self.arr2.lhs, ltype)
-              else:
-                  ltype = "vector<%s >"%ltype
-          if self.arr2.lhs:
-              if self.arr2.lhs.isdigit():
-                  if self.arr1.lhs.isdigit():
-                    ltype = "array<%s,%s >"%(self.arr2.lhs,ltype)
-                    # ltype = ltype
-              else:
-                  ltype = "vector<%s >"%ltype
-      result = ltype + " " + scope + "Get" + self.cname[0:1].upper() + self.cname[1:] + "() const" + suffix
-      return result
-
-    def setter_declare(self, scope = "", suffix = ""):
-      ltype = self.ctype
-      if self.ctemplate:
-          if ltype != "*":
-              ltype += "<%s >"%self.ctemplate
-          else:
-              ltype = "%s *"%self.ctemplate
-      if self.arr1.lhs:
-          if self.arr1.lhs.isdigit():
-            # ltype = "const %s&"%ltype
-            if self.arr2.lhs and self.arr2.lhs.isdigit():
-                  ltype = "const array< %s, array<%s,%s > >&"%(self.arr1.lhs,self.arr2.lhs, ltype)
+    def getter_declare(self, scope="", suffix=""):
+        """Getter member function declaration."""
+        ltype = self.ctype
+        if self.ctemplate:
+            if ltype != "*":
+                ltype += "<%s >"%self.ctemplate
             else:
-                  ltype = "const array<%s,%s >& "%(self.arr1.lhs,ltype)              
-            
-          else:
-              if self.arr2.lhs and self.arr2.lhs.isdigit():
-                  ltype = "const vector< array<%s,%s > >&"%(self.arr2.lhs, ltype)
-              else:
-                  ltype = "const vector<%s >&"%ltype
-      else:
-          if not self.type in basic_names:
-            ltype = "const %s &"%ltype
-             
-      result = "void " + scope + "Set" + self.cname[0:1].upper() + self.cname[1:] + "( " + ltype + " value )" + suffix
-      return result
+                ltype = "%s *"%self.ctemplate
+        if self.arr1.lhs:
+            if self.arr1.lhs.isdigit():
+                ltype = "array<%s,%s > "%(self.arr1.lhs, ltype)
+                # ltype = ltype
+            else:
+                if self.arr2.lhs and self.arr2.lhs.isdigit():
+                    ltype = "vector< array<%s,%s > >"%(self.arr2.lhs, ltype)
+                else:
+                    ltype = "vector<%s >"%ltype
+            if self.arr2.lhs:
+                if self.arr2.lhs.isdigit():
+                    if self.arr1.lhs.isdigit():
+                        ltype = "array<%s,%s >"%(self.arr2.lhs, ltype)
+                        # ltype = ltype
+                else:
+                    ltype = "vector<%s >"%ltype
+        result = ltype + " " + scope + "Get" + self.cname[0:1].upper() + self.cname[1:] + "() const" + suffix
+        return result
+
+    def setter_declare(self, scope="", suffix=""):
+        """Setter member function declaration."""
+        ltype = self.ctype
+        if self.ctemplate:
+            if ltype != "*":
+                ltype += "<%s >"%self.ctemplate
+            else:
+                ltype = "%s *"%self.ctemplate
+        if self.arr1.lhs:
+            if self.arr1.lhs.isdigit():
+                # ltype = "const %s&"%ltype
+                if self.arr2.lhs and self.arr2.lhs.isdigit():
+                    ltype = "const array< %s, array<%s,%s > >&"%(self.arr1.lhs, self.arr2.lhs, ltype)
+                else:
+                    ltype = "const array<%s,%s >& "%(self.arr1.lhs, ltype)
+            else:
+                if self.arr2.lhs and self.arr2.lhs.isdigit():
+                    ltype = "const vector< array<%s,%s > >&"%(self.arr2.lhs, ltype)
+                else:
+                    ltype = "const vector<%s >&"%ltype
+        else:
+            if not self.type in basic_names:
+                ltype = "const %s &"%ltype
+
+        result = "void " + scope + "Set" + self.cname[0:1].upper() + self.cname[1:] + "( " + ltype + " value )" + suffix
+        return result
 
 class Version:
+    """This class represents the nif.xml <version> tag."""
     def __init__(self, element):
         self.num = element.getAttribute('num')
         self.description = element.firstChild.nodeValue.strip()
-        
+
 class Basic:
+    """This class represents the nif.xml <basic> tag."""
     def __init__(self, element):
         global native_types
 
         self.name = element.getAttribute('name')
-        assert(self.name) # debug
+        assert self.name # debug
         self.cname = class_name(self.name)
         if element.firstChild and element.firstChild.nodeType == Node.TEXT_NODE:
             self.description = element.firstChild.nodeValue.strip()
@@ -1041,34 +1055,35 @@ class Basic:
         self.options = []
 
 class Enum(Basic):
-  def __init__(self, element):
-      Basic.__init__(self, element)
-      
-      self.storage = element.getAttribute('storage')
-      self.prefix  = element.getAttribute('prefix')
-      # Find the native storage type
-      self.storage = basic_types[self.storage].nativetype
-      self.description = element.firstChild.nodeValue.strip()
-             
-      self.nativetype = self.cname
-      native_types[self.name] = self.nativetype
-      
-      # Locate all special enumeration options
-      for option in element.getElementsByTagName('option'):
-          if self.prefix and option.hasAttribute('name'):
-              option.setAttribute('name', self.prefix + "_" + option.getAttribute('name'))
-          x = Option(option)
-          self.options.append(x)
+    """This class represents the nif.xml <enum> tag."""
+    def __init__(self, element):
+        Basic.__init__(self, element)
+
+        self.storage = element.getAttribute('storage')
+        self.prefix = element.getAttribute('prefix')
+        # Find the native storage type
+        self.storage = basic_types[self.storage].nativetype
+        self.description = element.firstChild.nodeValue.strip()
+
+        self.nativetype = self.cname
+        native_types[self.name] = self.nativetype
+
+        # Locate all special enumeration options
+        for option in element.getElementsByTagName('option'):
+            if self.prefix and option.hasAttribute('name'):
+                option.setAttribute('name', self.prefix + "_" + option.getAttribute('name'))
+            self.options.append(Option(option))
 
 class Flag(Enum):
-  def __init__(self, element):
-      Enum.__init__(self, element)
-      for option in self.options:
-        option.bit = option.value
-        option.value = 1 << int(option.value)
-          
+    """This class represents the nif.xml <bitflags> tag."""
+    def __init__(self, element):
+        Enum.__init__(self, element)
+        for option in self.options:
+            option.bit = option.value
+            option.value = 1 << int(option.value)
+
 class Compound(Basic):
-    # create a compound type from the XML <compound /> attributes
+    """This class represents the nif.xml <compound> tag."""
     def __init__(self, element):
         Basic.__init__(self, element)
 
@@ -1093,12 +1108,12 @@ class Compound(Basic):
                 # recursively defined structures... so we remove
                 # this one to avoid the problem
                 # as a result a minority of nifs won't load
-                continue 
+                continue
             #*********************
             #** NIFLIB HACK END **
             #*********************
             self.members.append(x)
-            
+
             # detect templates
             #if x.type == 'TEMPLATE':
             #    self.template = True
@@ -1106,44 +1121,41 @@ class Compound(Basic):
             #    self.template = True
 
             # detect argument
-            if x.uses_argument:
-                self.argument = True
-            else:
-                self.argument = False
+            self.argument = bool(x.uses_argument)
 
             # detect links & crossrefs
-            y = None
+            mem = None
             try:
-                y = basic_types[x.type]
+                mem = basic_types[x.type]
             except KeyError:
                 try:
-                    y = compound_types[x.type]
+                    mem = compound_types[x.type]
                 except KeyError:
                     pass
-            if y:
-                if y.has_links:
+            if mem:
+                if mem.has_links:
                     self.has_links = True
-                if y.has_crossrefs:
+                if mem.has_crossrefs:
                     self.has_crossrefs = True
-                    
+
         # create duplicate chains for items that need it (only valid in current object scope)
         #  prefer to use iterators to avoid O(n^2) but I dont know how to reset iterators
-        for x in self.members:
-          atx = False
-          for y in self.members:
-            if atx:
-              if x.name == y.name: # duplicate
-                x.next_dup = y
-                break
-            elif x == y:
-              atx = True
+        for outer in self.members:
+            atx = False
+            for inner in self.members:
+                if atx:
+                    if outer.name == inner.name: # duplicate
+                        outer.next_dup = inner
+                        break
+                elif outer == inner:
+                    atx = True
 
     def code_construct(self):
         # constructor
         result = ''
         first = True
-        for y in self.members:
-            y_code_construct = y.code_construct()
+        for mem in self.members:
+            y_code_construct = mem.code_construct()
             if y_code_construct:
                 if not first:
                     result += ', ' + y_code_construct
@@ -1153,20 +1165,21 @@ class Compound(Basic):
         return result
 
     def code_include_h(self):
-        if self.nativetype: return ""
+        if self.nativetype:
+            return ""
 
         result = ""
 
         # include all required structures
         used_structs = []
-        for y in self.members:
+        for mem in self.members:
             file_name = None
-            if y.type != self.name:
-                if y.type in compound_names:
-                    if not compound_types[y.type].nativetype:
-                        file_name = "%s%s.h"%(self.gen_file_prefix, y.ctype)
-                elif y.type in basic_names:
-                    if basic_types[y.type].nativetype == "Ref":
+            if mem.type != self.name:
+                if mem.type in compound_names:
+                    if not compound_types[mem.type].nativetype:
+                        file_name = "%s%s.h"%(self.gen_file_prefix, mem.ctype)
+                elif mem.type in basic_names:
+                    if basic_types[mem.type].nativetype == "Ref":
                         file_name = "%sRef.h"%(self.root_file_prefix)
             if file_name and file_name not in used_structs:
                 used_structs.append( file_name )
@@ -1175,31 +1188,31 @@ class Compound(Basic):
         for file_name in used_structs:
             result += '#include "%s"\n'%file_name
         return result
-        
+
     def code_fwd_decl(self):
-        if self.nativetype: return ""
-        
+        if self.nativetype:
+            return ""
         result = ""
 
         # forward declaration of blocks
         used_blocks = []
-        for y in self.members:
-            if y.template in block_names and y.template != self.name:
-                if not y.ctemplate in used_blocks:
-                    used_blocks.append( y.ctemplate )
+        for mem in self.members:
+            if mem.template in block_names and mem.template != self.name:
+                if not mem.ctemplate in used_blocks:
+                    used_blocks.append( mem.ctemplate )
         if used_blocks:
             result += '\n// Forward define of referenced NIF objects\n'
         for fwd_class in used_blocks:
             result += 'class %s;\n'%fwd_class
-        
         return result
 
     def code_include_cpp_set(self, usedirs=False, gen_dir=None, obj_dir=None):
-        if self.nativetype: return ""
-        
+        if self.nativetype:
+            return ""
+
         if not usedirs:
-          gen_dir = self.gen_file_prefix
-          obj_dir = self.obj_file_prefix
+            gen_dir = self.gen_file_prefix
+            obj_dir = self.obj_file_prefix
 
         result = []
 
@@ -1207,19 +1220,19 @@ class Compound(Basic):
             result.append('#include "%s%s.h"\n'%(gen_dir, self.cname))
         elif self.name in block_names:
             result.append('#include "%s%s.h"\n'%(obj_dir, self.cname))
-        else: assert(False) # bug
+        else: assert False # bug
 
         # include referenced blocks
         used_blocks = []
-        for y in self.members:
-            if y.template in block_names and y.template != self.name:
-                file_name = '#include "%s%s.h"\n'%(obj_dir, y.ctemplate)
+        for mem in self.members:
+            if mem.template in block_names and mem.template != self.name:
+                file_name = '#include "%s%s.h"\n'%(obj_dir, mem.ctemplate)
                 if file_name not in used_blocks:
                     used_blocks.append( file_name )
-            if y.type in compound_names:
-                subblock = compound_types[y.type]
+            if mem.type in compound_names:
+                subblock = compound_types[mem.type]
                 used_blocks.extend(subblock.code_include_cpp_set(True, gen_dir, obj_dir))
-            for terminal in y.cond.get_terminals():
+            for terminal in mem.cond.get_terminals():
                 if terminal in block_types:
                     used_blocks.append('#include "%s%s.h"\n'%(obj_dir, terminal))
         for file_name in sorted(set(used_blocks)):
@@ -1230,37 +1243,38 @@ class Compound(Basic):
     def code_include_cpp(self, usedirs=False, gen_dir=None, obj_dir=None):
         return ''.join(self.code_include_cpp_set(True, gen_dir, obj_dir))
 
-    # find member by name
     def find_member(self, name, inherit=False):
-      for y in self.members:
-        if y.name == name:
-          return y
-      return None
-      
-    # find first reference of name in class
+        """Find member by name"""
+        for mem in self.members:
+            if mem.name == name:
+                return mem
+        return None
+
     def find_first_ref(self, name):
-      for y in self.members:
-        if y.arr1 and y.arr1.lhs == name:
-          return y
-        elif y.arr2 and y.arr2.lhs == name:
-          return y
-      return None
-    
-    # Tests recursively for members with an array size.
+        """Find first reference of name in class."""
+        for mem in self.members:
+            if mem.arr1 and mem.arr1.lhs == name:
+                return mem
+            elif mem.arr2 and mem.arr2.lhs == name:
+                return mem
+        return None
+
     def has_arr(self):
-        for y in self.members:
-            if y.arr1.lhs or (y.type in compound_types and compound_types[y.type].has_arr()):
+        """Tests recursively for members with an array size."""
+        for mem in self.members:
+            if mem.arr1.lhs or (mem.type in compound_types and compound_types[mem.type].has_arr()):
                 return True
         return False
 
 class Block(Compound):
+    """This class represents the nif.xml <niobject> tag."""
     def __init__(self, element):
         Compound.__init__(self, element)
         #the relative path to files in the gen folder
         self.gen_file_prefix = "../gen/"
         #the relative path to files in the obj folder
         self.obj_file_prefix = ""
-        
+
         self.is_ancestor = (element.getAttribute('abstract') == "1")
         inherit = element.getAttribute('inherit')
         if inherit:
@@ -1288,70 +1302,70 @@ class Block(Compound):
 #include <vector>"""
         result += Compound.code_include_h(self)
         return result
-    
+
     # find member by name
     def find_member(self, name, inherit=False):
-      ret = Compound.find_member(self, name)
-      if not ret and inherit and self.inherit:
-        ret = self.inherit.find_member(name, inherit)
-      return ret
+        ret = Compound.find_member(self, name)
+        if not ret and inherit and self.inherit:
+            ret = self.inherit.find_member(name, inherit)
+        return ret
 
     # find first reference of name in class
     def find_first_ref(self, name):
-      ret = None
-      if self.inherit:
-        ret = self.inherit.find_first_ref(name)
-      if not ret:
-        ret = Compound.find_first_ref(self, name)
-      return ret
-      
+        ret = None
+        if self.inherit:
+            ret = self.inherit.find_first_ref(name)
+        if not ret:
+            ret = Compound.find_first_ref(self, name)
+        return ret
+
 #
 # import elements into our code generating classes
 #
 
 # import via "import nifxml" from .
 if os.path.exists("nif.xml"):
-    doc = parse("nif.xml")
+    XML = parse("nif.xml")
 # import via "import docsys" from ..
 elif os.path.exists("docsys/nif.xml"):
-    doc = parse("docsys/nif.xml")
+    XML = parse("docsys/nif.xml")
 # new submodule system
 elif os.path.exists("nifxml/nif.xml"):
-    doc = parse("nifxml/nif.xml")
+    XML = parse("nifxml/nif.xml")
 else:
     raise ImportError("nif.xml not found")
 
-for element in doc.getElementsByTagName('version'):
-    x = Version(element)
+for el in XML.getElementsByTagName('version'):
+    x = Version(el)
     version_types[x.num] = x
     version_names.append(x.num)
 
-for element in doc.getElementsByTagName('basic'):
-    x = Basic(element)
+for el in XML.getElementsByTagName('basic'):
+    x = Basic(el)
     assert not x.name in basic_types
     basic_types[x.name] = x
     basic_names.append(x.name)
 
-for element in doc.getElementsByTagName('enum'):
-    x = Enum(element)
+for el in XML.getElementsByTagName('enum'):
+    x = Enum(el)
     assert not x.name in enum_types
     enum_types[x.name] = x
     enum_names.append(x.name)
 
-for element in doc.getElementsByTagName('bitflags'):
-    x = Flag(element)
+for el in XML.getElementsByTagName('bitflags'):
+    x = Flag(el)
     assert not x.name in flag_types
     flag_types[x.name] = x
     flag_names.append(x.name)
-    
-for element in doc.getElementsByTagName("compound"):
-    x = Compound(element)
+
+for el in XML.getElementsByTagName("compound"):
+    x = Compound(el)
     assert not x.name in compound_types
     compound_types[x.name] = x
     compound_names.append(x.name)
 
-for element in doc.getElementsByTagName("niobject"):
-    x = Block(element)
+for el in XML.getElementsByTagName("niobject"):
+    x = Block(el)
     assert not x.name in block_types
     block_types[x.name] = x
     block_names.append(x.name)

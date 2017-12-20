@@ -7,10 +7,10 @@
 # --------------------------------------------------------------------------
 # Command line options
 #
-# -p /path/to/niflib : specifies the path where niflib can be found 
+# -p /path/to/niflib : specifies the path where niflib can be found
 #
 # -b : enable bootstrap mode (generates templates)
-# 
+#
 # -i : do NOT generate implmentation; place all code in defines.h
 #
 # -a : generate accessors for data in classes
@@ -76,29 +76,35 @@
 """
 
 from __future__ import unicode_literals
-from nifxml import *
+
+from textwrap import fill
 from distutils.dir_util import mkpath
+import sys
 import os
 import io
-import hashlib
 import itertools
+
+from nifxml import Block, native_types, NATIVETYPES
+from nifxml import block_types, basic_types, compound_types, enum_types, flag_types
+from nifxml import block_names, compound_names
+from nifxml import scanBrackets, define_name
 
 #
 # global data
 #
 
-copyright_year = 2017
+COPYRIGHT_YEAR = 2017
 
-copyright_notice = r'''/* Copyright (c) {0}, NIF File Format Library and Tools
-All rights reserved.  Please see niflib.h for license. */'''.format(copyright_year)
+COPYRIGHT_NOTICE = r'''/* Copyright (c) {0}, NIF File Format Library and Tools
+All rights reserved.  Please see niflib.h for license. */'''.format(COPYRIGHT_YEAR)
 
-incl_guard = r'''
+INCL_GUARD = r'''
 #ifndef _{0}_H_
 #define _{0}_H_
 '''
 
 # Partially generated notice
-partgen_notice = copyright_notice + r'''
+PARTGEN_NOTICE = COPYRIGHT_NOTICE + r'''
 
 //-----------------------------------NOTICE----------------------------------//
 // Some of this file is automatically filled in by a Python script.  Only    //
@@ -107,14 +113,14 @@ partgen_notice = copyright_notice + r'''
 //-----------------------------------NOTICE----------------------------------//'''
 
 # Fully generated notice
-fullgen_notice = copyright_notice + r'''
+FULLGEN_NOTICE = COPYRIGHT_NOTICE + r'''
 
 //---THIS FILE WAS AUTOMATICALLY GENERATED.  DO NOT EDIT---//
 
 // To change this file, alter the gen_niflib.py script.'''
 
 # NiObject standard declaration
-classdecl = r'''/*! Constructor */
+CLASS_DECL = r'''/*! Constructor */
 NIFLIB_API {0}();
 
 /*! Destructor */
@@ -145,7 +151,7 @@ NIFLIB_API virtual string asString( bool verbose = false ) const;
 NIFLIB_API virtual const Type & GetType() const;'''
 
 # NiObject internals
-classinternal = r'''/*! NIFLIB_HIDDEN function.  For internal use only. */
+CLASS_INTL = r'''/*! NIFLIB_HIDDEN function.  For internal use only. */
 NIFLIB_HIDDEN virtual void Read( istream& in, list<unsigned int> & link_stack, const NifInfo & info );
 /*! NIFLIB_HIDDEN function.  For internal use only. */
 NIFLIB_HIDDEN virtual void Write( ostream& out, const map<NiObjectRef,unsigned int> & link_map, list<NiObject *> & missing_link_stack, const NifInfo & info ) const;
@@ -157,7 +163,7 @@ NIFLIB_HIDDEN virtual list<NiObjectRef> GetRefs() const;
 NIFLIB_HIDDEN virtual list<NiObject *> GetPtrs() const;'''
 
 # Compound standard declaration
-compound_decl = r'''/*! Default Constructor */
+COMPOUND_DECL = r'''/*! Default Constructor */
 NIFLIB_API {0}();
 /*! Default Destructor */
 NIFLIB_API ~{0}();
@@ -167,7 +173,7 @@ NIFLIB_API {0}( const {0} & src );
 NIFLIB_API {0} & operator=( const {0} & src );'''
 
 # Enum stream implementation
-enum_impl = r'''//--{0}--//
+ENUM_IMPL = r'''//--{0}--//
 
 void NifStream( {0} & val, istream& in, const NifInfo & info ) {{
 	{1} temp;
@@ -186,7 +192,7 @@ ostream & operator<<( ostream & out, {0} const & val ) {{
 }}'''
 
 # Enum stream implementation switch case
-enum_impl_case = r'''case {0}: return out << "{1}";
+ENUM_IMPL_CASE = r'''case {0}: return out << "{1}";
 		'''
 
 
@@ -231,7 +237,7 @@ for i in sys.argv:
         GENALLFILES = False
     prev = i
 
-    
+
 # Fix known manual update attributes. For now hard code here.
 block_types["NiKeyframeData"].find_member("Num Rotation Keys").is_manual_update = True
 #block_types["NiTriStripsData"].find_member("Num Triangles").is_manual_update = True
@@ -265,7 +271,7 @@ class CFile(io.TextIOWrapper):
         self.backslash_mode = False
         self.guarding = False
         self.namespaced = False
-    
+
     def end(self):
         """
         Closes any namespaces and include guards and closes the file.
@@ -278,7 +284,7 @@ class CFile(io.TextIOWrapper):
             self.guarding = False
         self.close()
 
-    def code(self, txt = None):
+    def code(self, txt=None):
         r"""
         Formats a line of C++ code; the returned result always ends with a newline.
         If txt starts with "E{rb}", indent is decreased, if it ends with "E{lb}", indent is increased.
@@ -288,17 +294,19 @@ class CFile(io.TextIOWrapper):
             "\n" will create a backslashed newline in backslash mode.
         @type txt: string, None
         """
-        # txt 
+        # txt
         # this will also break the backslash, which is kind of handy
         # call code("\n") if you want a backslashed newline in backslash mode
-        if txt == None:
+        if txt is None:
             self.write("\n")
             return
-    
+
         # block end
-        if txt[:1] == "}": self.indent -= 1
+        if txt[:1] == "}":
+            self.indent -= 1
         # special, private:, public:, and protected:
-        if txt[-1:] == ":": self.indent -= 1
+        if txt[-1:] == ":":
+            self.indent -= 1
         # endline string
         if self.backslash_mode:
             endl = " \\\n"
@@ -311,12 +319,14 @@ class CFile(io.TextIOWrapper):
         # indent, and add newline
         result = prefix + txt.replace("\n", endl + prefix) + endl
         # block start
-        if txt[-1:] == "{": self.indent += 1
+        if txt[-1:] == "{":
+            self.indent += 1
         # special, private:, public:, and protected:
-        if txt[-1:] == ":": self.indent += 1
-        
+        if txt[-1:] == ":":
+            self.indent += 1
+
         self.write(result.encode('utf-8').decode('utf-8', 'strict'))
-    
+
     def guard(self, txt):
         """
         Begins an include guard scope for the file
@@ -326,8 +336,8 @@ class CFile(io.TextIOWrapper):
         if self.guarding:
             return
         self.guarding = True
-        self.code( incl_guard.format(txt) )
-    
+        self.code( INCL_GUARD.format(txt) )
+
     def namespace(self, txt):
         """
         Begins a namespace scope for the file
@@ -338,7 +348,7 @@ class CFile(io.TextIOWrapper):
             return
         self.namespaced = True
         self.write( 'namespace {0} {{\n'.format(txt) )
-    
+
     def include(self, txt):
         """
         Includes a file
@@ -347,8 +357,7 @@ class CFile(io.TextIOWrapper):
         """
         self.write( '#include {0}\n'.format(txt) )
 
-    # 
-    def comment(self, txt, doxygen = True):
+    def comment(self, txt, doxygen=True):
         """
         Wraps text in C++ comments and outputs it to the file.  Handles multilined comments as well.
         Result always ends with a newline
@@ -357,32 +366,32 @@ class CFile(io.TextIOWrapper):
         """
 
         # skip comments when we are in backslash mode
-        if self.backslash_mode: return
-        
-        lines = txt.split( '\n' )
+        if self.backslash_mode:
+            return
+
+        lines = txt.split('\n')
 
         txt = ""
-        for l in lines:
-            txt = txt + fill(l, 80) + "\n"
+        for com in lines:
+            txt = txt + fill(com, 80) + "\n"
 
         txt = txt.strip()
         if not txt:
             return
-        
-        num_line_ends = txt.count( '\n' )
-        
+
+        num_line_ends = txt.count('\n')
 
         if doxygen:
             if num_line_ends > 0:
                 txt = txt.replace("\n", "\n * ")
-                self.code("/*!\n * " + txt + "\n */")  
+                self.code("/*!\n * " + txt + "\n */")
             else:
-                self.code("/*! " + txt + " */" )
+                self.code("/*! " + txt + " */")
         else:
             lines = txt.split('\n')
-            for l in lines:
-                self.code( "// " + l )
-    
+            for com in lines:
+                self.code("// " + com)
+
     def declare(self, block):
         """
         Formats the member variables for a specific class as described by the XML and outputs the result to the file.
@@ -392,22 +401,22 @@ class CFile(io.TextIOWrapper):
         if isinstance(block, Block):
             #self.code('protected:')
             prot_mode = True
-        for y in block.members:
-            if not y.is_duplicate:
+        for mem in block.members:
+            if not mem.is_duplicate:
                 if isinstance(block, Block):
-                    if y.is_public and prot_mode:
+                    if mem.is_public and prot_mode:
                         self.code('public:')
                         prot_mode = False
-                    elif not y.is_public and not prot_mode:
+                    elif not mem.is_public and not prot_mode:
                         self.code('protected:')
                         prot_mode = True
-                self.comment(y.description)
-                self.code(y.code_declare())
-                if y.func:
-                  self.comment(y.description)
-                  self.code("%s %s() const;"%(y.ctype,y.func))
+                self.comment(mem.description)
+                self.code(mem.code_declare())
+                if mem.func:
+                    self.comment(mem.description)
+                    self.code("%s %s() const;"%(mem.ctype, mem.func))
 
-    def stream(self, block, action, localprefix = "", prefix = "", arg_prefix = "", arg_member = None):
+    def stream(self, block, action, localprefix="", prefix="", arg_prefix="", arg_member=None):
         """
         Generates the function code for various functions in Niflib and outputs it to the file.
         @param block: The class or struct to generate the function for.
@@ -440,9 +449,8 @@ class CFile(io.TextIOWrapper):
             stream = "in"
         else:
             stream = "out"
-        
 
-        # preperation
+        # preparation
         if isinstance(block, Block) or block.name in ["Footer", "Header"]:
             if action == ACTION_READ:
                 if block.has_links or block.has_crossrefs:
@@ -479,31 +487,35 @@ class CFile(io.TextIOWrapper):
             block.members.reverse() # calculated data depends on data further down the structure
             for y in block.members:
                 if not y.is_duplicate and not y.is_manual_update and action in [ACTION_WRITE, ACTION_OUT]:
-                  if y.func:
-                      self.code('%s%s = %s%s();'%(prefix, y.cname, prefix, y.func))
-                  elif y.is_calculated:
-                      if action in [ACTION_READ, ACTION_WRITE]:
-                          self.code('%s%s = %s%sCalc(info);'%(prefix, y.cname, prefix, y.cname))
-                      # ACTION_OUT is in asString(), which doesn't take version info
-                      # so let's simply not print the field in this case
-                  elif y.arr1_ref:
-                    if not y.arr1 or not y.arr1.lhs: # Simple Scalar
-                      cref = block.find_member(y.arr1_ref[0], True) 
-                      # if not cref.is_duplicate and not cref.next_dup and (not cref.cond.lhs or cref.cond.lhs == y.name):
-                        # self.code('assert(%s%s == (%s)(%s%s.size()));'%(prefix, y.cname, y.ctype, prefix, cref.cname))
-                      self.code('%s%s = (%s)(%s%s.size());'%(prefix, y.cname, y.ctype, prefix, cref.cname))
-                  elif y.arr2_ref: # 1-dimensional dynamic array
-                    cref = block.find_member(y.arr2_ref[0], True) 
-                    if not y.arr1 or not y.arr1.lhs: # Second dimension
-                      # if not cref.is_duplicate and not cref.next_dup (not cref.cond.lhs or cref.cond.lhs == y.name):
-                       # self.code('assert(%s%s == (%s)((%s%s.size() > 0) ? %s%s[0].size() : 0));'%(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
-                      self.code('%s%s = (%s)((%s%s.size() > 0) ? %s%s[0].size() : 0);'%(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
-                    else:
-                        # index of dynamically sized array
-                        self.code('for (unsigned int i%i = 0; i%i < %s%s.size(); i%i++)'%(self.indent, self.indent, prefix, cref.cname, self.indent))
-                        self.code('\t%s%s[i%i] = (%s)(%s%s[i%i].size());'%(prefix, y.cname, self.indent, y.ctype, prefix, cref.cname, self.indent))
-                  # else: #has duplicates needs to be selective based on version
-                    # self.code('assert(!"%s");'%(y.name))
+                    if y.func:
+                        self.code('%s%s = %s%s();'%(prefix, y.cname, prefix, y.func))
+                    elif y.is_calculated:
+                        if action in [ACTION_READ, ACTION_WRITE]:
+                            self.code('%s%s = %s%sCalc(info);'%(prefix, y.cname, prefix, y.cname))
+                        # ACTION_OUT is in asString(), which doesn't take version info
+                        # so let's simply not print the field in this case
+                    elif y.arr1_ref:
+                        if not y.arr1 or not y.arr1.lhs: # Simple Scalar
+                            cref = block.find_member(y.arr1_ref[0], True)
+                            # if not cref.is_duplicate and not cref.next_dup and (not cref.cond.lhs or cref.cond.lhs == y.name):
+                              # self.code('assert(%s%s == (%s)(%s%s.size()));'%(prefix, y.cname, y.ctype, prefix, cref.cname))
+                            self.code('%s%s = (%s)(%s%s.size());'%(prefix, y.cname, y.ctype, prefix, cref.cname))
+                    elif y.arr2_ref: # 1-dimensional dynamic array
+                        cref = block.find_member(y.arr2_ref[0], True)
+                        if not y.arr1 or not y.arr1.lhs: # Second dimension
+                            # if not cref.is_duplicate and not cref.next_dup (not cref.cond.lhs or cref.cond.lhs == y.name):
+                            # self.code('assert(%s%s == (%s)((%s%s.size() > 0) ? %s%s[0].size() : 0));'\
+                            # %(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
+                            self.code('%s%s = (%s)((%s%s.size() > 0) ? %s%s[0].size() : 0);'\
+                            %(prefix, y.cname, y.ctype, prefix, cref.cname, prefix, cref.cname))
+                        else:
+                            # index of dynamically sized array
+                            self.code('for (unsigned int i%i = 0; i%i < %s%s.size(); i%i++)'\
+                            %(self.indent, self.indent, prefix, cref.cname, self.indent))
+                            self.code('\t%s%s[i%i] = (%s)(%s%s[i%i].size());'\
+                            %(prefix, y.cname, self.indent, y.ctype, prefix, cref.cname, self.indent))
+                    #else: #has duplicates needs to be selective based on version
+                      #self.code('assert(!"%s");'%(y.name))
             block.members.reverse() # undo reverse
 
 
@@ -518,7 +530,7 @@ class CFile(io.TextIOWrapper):
                 subblock = enum_types[y.type]
             elif y.type in flag_types:
                 subblock = flag_types[y.type]
-                
+
             # check for links
             if action in [ACTION_FIXLINKS, ACTION_GETREFS, ACTION_GETPTRS]:
                 if not subblock.has_links and not subblock.has_crossrefs:
@@ -542,12 +554,12 @@ class CFile(io.TextIOWrapper):
                     if not y_arr2_lmember and y.arr2.lhs == z.name:
                         y_arr2_lmember = z
                     if not y_cond_lmember:
-                       if y.cond.lhs == z.name:
-                          y_cond_lmember = z
-                       elif y.cond.op == '&&' and y.cond.lhs == z.name:
-                          y_cond_lmember = z
-                       elif y.cond.op == '||' and y.cond.lhs == z.name:
-                          y_cond_lmember = z
+                        if y.cond.lhs == z.name:
+                            y_cond_lmember = z
+                        elif y.cond.op == '&&' and y.cond.lhs == z.name:
+                            y_cond_lmember = z
+                        elif y.cond.op == '||' and y.cond.lhs == z.name:
+                            y_cond_lmember = z
                     if not y_arg and y.arg == z.name:
                         y_arg = z
                 if y_arr1_lmember:
@@ -578,15 +590,15 @@ class CFile(io.TextIOWrapper):
             y_vercond = y.vercond.code('info.')
             if action in [ACTION_READ, ACTION_WRITE, ACTION_FIXLINKS]:
                 if lastver1 != y.ver1 or lastver2 != y.ver2 or lastuserver != y.userver or lastuserver2 != y.userver2 or lastvercond != y_vercond:
-                    # we must switch to a new version block    
+                    # we must switch to a new version block
                     # close old version block
-                    if lastver1 or lastver2 or lastuserver or lastuserver2 or lastvercond: self.code("};")
-                    # close old condition block as well    
+                    if lastver1 or lastver2 or lastuserver or lastuserver2 or lastvercond:
+                        self.code("};")
+                    # close old condition block as well
                     if lastcond:
                         self.code("};")
                         lastcond = None
                     # start new version block
-                    
                     concat = ''
                     verexpr = ''
                     if y.ver1:
@@ -604,18 +616,17 @@ class CFile(io.TextIOWrapper):
                     if y_vercond:
                         verexpr = "%s%s( %s )"%(verexpr, concat, y_vercond)
                     if verexpr:
-                        # remove outer redundant parenthesis 
+                        # remove outer redundant parenthesis
                         bleft, bright = scanBrackets(verexpr)
                         if bleft == 0 and bright == (len(verexpr) - 1):
                             self.code("if %s {"%verexpr)
                         else:
                             self.code("if ( %s ) {"%verexpr)
-                    
                     # start new condition block
                     if lastcond != y_cond and y_cond:
                         self.code("if ( %s ) {"%y_cond)
                 else:
-                    # we remain in the same version block    
+                    # we remain in the same version block
                     # check condition block
                     if lastcond != y_cond:
                         if lastcond:
@@ -629,7 +640,6 @@ class CFile(io.TextIOWrapper):
                         self.code("};")
                     if y_cond:
                         self.code("if ( %s ) {"%y_cond)
-    
             # loop over arrays
             # and resolve variable name
             if not y.arr1.lhs:
@@ -637,31 +647,30 @@ class CFile(io.TextIOWrapper):
             else:
                 if action == ACTION_OUT:
                     self.code("array_output_count = 0;")
-                if y.arr1.lhs.isdigit() == False:
+                if not y.arr1.lhs.isdigit():
                     if action == ACTION_READ:
-                      # default to local variable, check if variable is in current scope if not then try to use
-                      #   definition from resized child
-                      memcode = "%s%s.resize(%s);"%(y_prefix, y.cname, y.arr1.code(y_arr1_prefix))
-                      mem = block.find_member(y.arr1.lhs, True) # find member in self or parents
-                      self.code(memcode)
-                      
+                        # default to local variable, check if variable is in current scope if not then try to use
+                        #   definition from resized child
+                        memcode = "%s%s.resize(%s);"%(y_prefix, y.cname, y.arr1.code(y_arr1_prefix))
+                        mem = block.find_member(y.arr1.lhs, True) # find member in self or parents
+                        self.code(memcode)
                     self.code(\
-                        "for (unsigned int i%i = 0; i%i < %s%s.size(); i%i++) {"%(self.indent, self.indent, y_prefix, y.cname, self.indent))
+                        "for (unsigned int i%i = 0; i%i < %s%s.size(); i%i++) {"\
+                        %(self.indent, self.indent, y_prefix, y.cname, self.indent))
                 else:
                     self.code(\
                         "for (unsigned int i%i = 0; i%i < %s; i%i++) {"\
                         %(self.indent, self.indent, y.arr1.code(y_arr1_prefix), self.indent))
                 if action == ACTION_OUT:
-                        self.code('if ( !verbose && ( array_output_count > MAXARRAYDUMP ) ) {')
-                        self.code('%s << "<Data Truncated. Use verbose mode to see complete listing.>" << endl;'%stream)
-                        self.code('break;')
-                        self.code('};')
-                        
+                    self.code('if ( !verbose && ( array_output_count > MAXARRAYDUMP ) ) {')
+                    self.code('%s << "<Data Truncated. Use verbose mode to see complete listing.>" << endl;'%stream)
+                    self.code('break;')
+                    self.code('};')
                 if not y.arr2.lhs:
                     z = "%s%s[i%i]"%(y_prefix, y.cname, self.indent-1)
                 else:
                     if not y.arr2_dynamic:
-                        if y.arr2.lhs.isdigit() == False:
+                        if not y.arr2.lhs.isdigit():
                             if action == ACTION_READ:
                                 self.code("%s%s[i%i].resize(%s);"%(y_prefix, y.cname, self.indent-1, y.arr2.code(y_arr2_prefix)))
                             self.code(\
@@ -673,12 +682,13 @@ class CFile(io.TextIOWrapper):
                                 %(self.indent, self.indent, y.arr2.code(y_arr2_prefix), self.indent))
                     else:
                         if action == ACTION_READ:
-                            self.code("%s%s[i%i].resize(%s[i%i]);"%(y_prefix, y.cname, self.indent-1, y.arr2.code(y_arr2_prefix), self.indent-1))
+                            self.code("%s%s[i%i].resize(%s[i%i]);"\
+                            %(y_prefix, y.cname, self.indent-1, y.arr2.code(y_arr2_prefix), self.indent-1))
                         self.code(\
                             "for (unsigned int i%i = 0; i%i < %s[i%i]; i%i++) {"\
                             %(self.indent, self.indent, y.arr2.code(y_arr2_prefix), self.indent-1, self.indent))
                     z = "%s%s[i%i][i%i]"%(y_prefix, y.cname, self.indent-2, self.indent-1)
-    
+
             if y.type in native_types:
                 # these actions distinguish between refs and non-refs
                 if action in [ACTION_READ, ACTION_WRITE, ACTION_FIXLINKS, ACTION_GETREFS, ACTION_GETPTRS]:
@@ -687,7 +697,7 @@ class CFile(io.TextIOWrapper):
                         if action in [ACTION_READ, ACTION_WRITE] and y.is_abstract is False:
                             # hack required for vector<bool>
                             if y.type == "bool" and y.arr1.lhs:
-                                self.code("{");
+                                self.code("{")
                                 if action == ACTION_READ:
                                     self.code("bool tmp;")
                                     self.code("NifStream( tmp, %s, info );"%(stream))
@@ -699,7 +709,7 @@ class CFile(io.TextIOWrapper):
                             # the usual thing
                             elif not y.arg:
                                 cast = ""
-                                if ( y.is_duplicate ):
+                                if y.is_duplicate:
                                     cast = "(%s&)" % y.ctype
                                 self.code("NifStream( %s%s, %s, info );"%(cast, z, stream))
                             else:
@@ -710,16 +720,15 @@ class CFile(io.TextIOWrapper):
                             self.code("NifStream( block_num, %s, info );"%stream)
                             self.code("link_stack.push_back( block_num );")
                         elif action == ACTION_WRITE:
-                            self.code("WriteRef( StaticCast<NiObject>(%s), %s, info, link_map, missing_link_stack );" % (z, stream))
+                            self.code("WriteRef( StaticCast<NiObject>(%s), %s, info, link_map, missing_link_stack );"%(z, stream))
                         elif action == ACTION_FIXLINKS:
-                            self.code("%s = FixLink<%s>( objects, link_stack, missing_link_stack, info );"%(z,y.ctemplate))
-                                
+                            self.code("%s = FixLink<%s>( objects, link_stack, missing_link_stack, info );"%(z, y.ctemplate))
                         elif action == ACTION_GETREFS and subblock.is_link:
                             if not y.is_duplicate:
-                                self.code('if ( %s != NULL )\n\trefs.push_back(StaticCast<NiObject>(%s));'%(z,z))
+                                self.code('if ( %s != NULL )\n\trefs.push_back(StaticCast<NiObject>(%s));'%(z, z))
                         elif action == ACTION_GETPTRS and subblock.is_crossref:
                             if not y.is_duplicate:
-                                self.code('if ( %s != NULL )\n\tptrs.push_back((NiObject *)(%s));'%(z,z))
+                                self.code('if ( %s != NULL )\n\tptrs.push_back((NiObject *)(%s));'%(z, z))
                 # the following actions don't distinguish between refs and non-refs
                 elif action == ACTION_OUT:
                     if not y.arr1.lhs:
@@ -733,7 +742,7 @@ class CFile(io.TextIOWrapper):
             else:
                 subblock = compound_types[y.type]
                 if not y.arr1.lhs:
-                    self.stream(subblock, action, "%s%s_"%(localprefix, y.cname), "%s."%z, y_arg_prefix,  y_arg)
+                    self.stream(subblock, action, "%s%s_"%(localprefix, y.cname), "%s."%z, y_arg_prefix, y_arg)
                 elif not y.arr2.lhs:
                     self.stream(subblock, action, "%s%s_"%(localprefix, y.cname), "%s."%z, y_arg_prefix, y_arg)
                 else:
@@ -768,131 +777,132 @@ class CFile(io.TextIOWrapper):
             if action == ACTION_GETPTRS:
                 self.code("return ptrs;")
 
-    # declaration
-    # print "$t Get$n() const; \nvoid Set$n($t value);\n\n";
-    def getset_declare(self, block, prefix = ""): # prefix is used to tag local variables only
-      for y in block.members:
-        if not y.func:
-          if y.cname.lower().find("unk") == -1:
-            self.code( y.getter_declare("", ";") )
-            self.code( y.setter_declare("", ";") )
-            self.code()
+    def getset_declare(self, block, prefix=""):
+        """
+        Declare getter and setter
+        prefix is used to tag local variables only
+        """
+        for y in block.members:
+            if not y.func:
+                if y.cname.lower().find("unk") == -1:
+                    self.code( y.getter_declare("", ";") )
+                    self.code( y.setter_declare("", ";") )
+                    self.code()
 
 
 #
 # Function to extract custom code from existing file
 #
-def ExtractCustomCode( file_name ):
-    custom_lines = {}
-    custom_lines['MISC'] = []
-    custom_lines['FILE HEAD'] = []
-    custom_lines['FILE FOOT'] = []
-    custom_lines['PRE-READ'] = []
-    custom_lines['POST-READ'] = []
-    custom_lines['PRE-WRITE'] = []
-    custom_lines['POST-WRITE'] = []
-    custom_lines['PRE-STRING'] = []
-    custom_lines['POST-STRING'] = []
-    custom_lines['PRE-FIXLINKS'] = []
-    custom_lines['POST-FIXLINKS'] = []
-    custom_lines['CONSTRUCTOR'] = []
-    custom_lines['DESTRUCTOR'] = []
-    
-    if os.path.isfile( file_name ) == False:
-        custom_lines['MISC'].append( "\n" )
-        custom_lines['FILE HEAD'].append( "\n" )
-        custom_lines['FILE FOOT'].append( "\n" )
-        custom_lines['PRE-READ'].append( "\n" )
-        custom_lines['POST-READ'].append( "\n" )
-        custom_lines['PRE-WRITE'].append( "\n" )
-        custom_lines['POST-WRITE'].append( "\n" )
-        custom_lines['PRE-STRING'].append( "\n" )
-        custom_lines['POST-STRING'].append( "\n" )
-        custom_lines['PRE-FIXLINKS'].append( "\n" )
-        custom_lines['POST-FIXLINKS'].append( "\n" )
-        custom_lines['CONSTRUCTOR'].append( "\n" )
-        custom_lines['DESTRUCTOR'].append( "\n" )
-        return custom_lines
-    
-    f = io.open(file_name, 'rt', 1, 'utf-8')
+def extract_custom_code(name):
+    custom = {}
+    custom['MISC'] = []
+    custom['FILE HEAD'] = []
+    custom['FILE FOOT'] = []
+    custom['PRE-READ'] = []
+    custom['POST-READ'] = []
+    custom['PRE-WRITE'] = []
+    custom['POST-WRITE'] = []
+    custom['PRE-STRING'] = []
+    custom['POST-STRING'] = []
+    custom['PRE-FIXLINKS'] = []
+    custom['POST-FIXLINKS'] = []
+    custom['CONSTRUCTOR'] = []
+    custom['DESTRUCTOR'] = []
+
+    if os.path.isfile(name) is False:
+        custom['MISC'].append('\n')
+        custom['FILE HEAD'].append('\n')
+        custom['FILE FOOT'].append('\n')
+        custom['PRE-READ'].append('\n')
+        custom['POST-READ'].append('\n')
+        custom['PRE-WRITE'].append('\n')
+        custom['POST-WRITE'].append('\n')
+        custom['PRE-STRING'].append('\n')
+        custom['POST-STRING'].append('\n')
+        custom['PRE-FIXLINKS'].append('\n')
+        custom['POST-FIXLINKS'].append('\n')
+        custom['CONSTRUCTOR'].append('\n')
+        custom['DESTRUCTOR'].append('\n')
+        return custom
+
+    f = io.open(name, 'rt', 1, 'utf-8')
     lines = f.readlines()
     f.close()
-   
+
     custom_flag = False
     custom_name = ""
-    
-    for l in lines:
-        if custom_flag == True:
-            if l.find( END_CUSTOM ) != -1:
+
+    for cln in lines:
+        if custom_flag is True:
+            if cln.find( END_CUSTOM ) != -1:
                 custom_flag = False
             else:
-                if not custom_lines[custom_name]:
-                    custom_lines[custom_name] = [l]
+                if not custom[custom_name]:
+                    custom[custom_name] = [cln]
                 else:
-                    custom_lines[custom_name].append(l)
-        if l.find( BEG_MISC ) != -1:
+                    custom[custom_name].append(cln)
+        if cln.find( BEG_MISC ) != -1:
             custom_flag = True
             custom_name = 'MISC'
-        elif l.find( BEG_HEAD ) != -1:
+        elif cln.find( BEG_HEAD ) != -1:
             custom_flag = True
             custom_name = 'FILE HEAD'
-        elif l.find( BEG_FOOT ) != -1:
+        elif cln.find( BEG_FOOT ) != -1:
             custom_flag = True
             custom_name = 'FILE FOOT'
-        elif l.find( BEG_PRE_READ ) != -1:
+        elif cln.find( BEG_PRE_READ ) != -1:
             custom_flag = True
             custom_name = 'PRE-READ'
-        elif l.find( BEG_POST_READ ) != -1:
+        elif cln.find( BEG_POST_READ ) != -1:
             custom_flag = True
             custom_name = 'POST-READ'
-        elif l.find( BEG_PRE_WRITE ) != -1:
+        elif cln.find( BEG_PRE_WRITE ) != -1:
             custom_flag = True
             custom_name = 'PRE-WRITE'
-        elif l.find( BEG_POST_WRITE ) != -1:
+        elif cln.find( BEG_POST_WRITE ) != -1:
             custom_flag = True
             custom_name = 'POST-WRITE'
-        elif l.find( BEG_PRE_STRING ) != -1:
+        elif cln.find( BEG_PRE_STRING ) != -1:
             custom_flag = True
             custom_name = 'PRE-STRING'
-        elif l.find( BEG_POST_STRING ) != -1:
+        elif cln.find( BEG_POST_STRING ) != -1:
             custom_flag = True
             custom_name = 'POST-STRING'
-        elif l.find( BEG_PRE_FIXLINK ) != -1:
+        elif cln.find( BEG_PRE_FIXLINK ) != -1:
             custom_flag = True
             custom_name = 'PRE-FIXLINKS'
-        elif l.find( BEG_POST_FIXLINK ) != -1:
+        elif cln.find( BEG_POST_FIXLINK ) != -1:
             custom_flag = True
             custom_name = 'POST-FIXLINKS'
-        elif l.find( BEG_CTOR ) != -1:
+        elif cln.find( BEG_CTOR ) != -1:
             custom_flag = True
             custom_name = 'CONSTRUCTOR'
-        elif l.find( BEG_DTOR ) != -1:
+        elif cln.find( BEG_DTOR ) != -1:
             custom_flag = True
             custom_name = 'DESTRUCTOR'
-        elif l.find( BEG_INCL ) != -1:
+        elif cln.find( BEG_INCL ) != -1:
             custom_flag = True
             custom_name = 'INCLUDE'
-    
-    return custom_lines
+    return custom
 
 #
 # Function to compare two files
 #
 
-def OverwriteIfChanged( original_file, candidate_file ):
+def overwrite_if_changed( original_file, candidate_file ):
     files_differ = False
 
     if os.path.isfile( original_file ):
-        f1 = file( original_file, 'r' )
-        f2 = file( candidate_file, 'r' )
+        file1 = io.open( original_file, 'r' )
+        file2 = io.open( candidate_file, 'r' )
 
-        s1 = f1.read()
-        s2 = f2.read()
+        str1 = file1.read()
+        str2 = file2.read()
 
-        f1.close()
-        f2.close()
-        
-        if s1 != s2:
+        file1.close()
+        file2.close()
+
+        if str1 != str2:
             files_differ = True
             #remove original file
             os.unlink( original_file )
@@ -902,7 +912,7 @@ def OverwriteIfChanged( original_file, candidate_file ):
     if files_differ:
         #Files differ, so overwrite original with candidate
         os.rename( candidate_file, original_file )
-   
+
 #
 # generate compound code
 #
@@ -915,252 +925,251 @@ mkpath(os.path.join(ROOT_DIR, "src/gen"))
 
 for n in compound_names:
     x = compound_types[n]
-    
     # skip natively implemented types
-    if x.name in NATIVETYPES.keys(): continue
-    
+    if x.name in NATIVETYPES.keys():
+        continue
     if not GENALLFILES and not x.cname in GENBLOCKS:
-            continue
-        
+        continue
+
     #Get existing custom code
     file_name = ROOT_DIR + '/include/gen/' + x.cname + '.h'
-    custom_lines = ExtractCustomCode( file_name );
+    custom_lines = extract_custom_code( file_name )
 
-    h = CFile(io.open(file_name, 'wb'))
-    h.code( fullgen_notice )
-    h.guard( x.cname.upper() )
-    h.code()
-    h.include( '"../NIF_IO.h"' )
+    HDR = CFile(io.open(file_name, 'wb'))
+    HDR.code( FULLGEN_NOTICE )
+    HDR.guard( x.cname.upper() )
+    HDR.code()
+    HDR.include( '"../NIF_IO.h"' )
     if n in ["Header", "Footer"]:
-        h.include( '"../obj/NiObject.h"' )
-    h.code( x.code_include_h() )
-    h.namespace( 'Niflib' )
-    h.code( x.code_fwd_decl() )
-    h.code()
+        HDR.include( '"../obj/NiObject.h"' )
+    HDR.code( x.code_include_h() )
+    HDR.namespace( 'Niflib' )
+    HDR.code( x.code_fwd_decl() )
+    HDR.code()
     # header
-    h.comment(x.description)
+    HDR.comment(x.description)
     hdr = "struct %s"%x.cname
-    if x.template: hdr = "template <class T >\n%s"%hdr
+    if x.template:
+        hdr = "template <class T >\n%s"%hdr
     hdr += " {"
-    h.code(hdr)
-    
+    HDR.code(hdr)
+
     #constructor/destructor/assignment
     if not x.template:
-        h.code( compound_decl.format(x.cname) )
+        HDR.code( COMPOUND_DECL.format(x.cname) )
 
     # declaration
-    h.declare(x)
+    HDR.declare(x)
 
     # header and footer functions
     if n  == "Header":
-        h.code( 'NIFLIB_HIDDEN NifInfo Read( istream& in );' )
-        h.code( 'NIFLIB_HIDDEN void Write( ostream& out, const NifInfo & info = NifInfo() ) const;' )
-        h.code( 'NIFLIB_HIDDEN string asString( bool verbose = false ) const;' )
-    
-    if n == "Footer":
-        h.code( 'NIFLIB_HIDDEN void Read( istream& in, list<unsigned int> & link_stack, const NifInfo & info );' )
-        h.code( 'NIFLIB_HIDDEN void Write( ostream& out, const map<NiObjectRef,unsigned int> & link_map, list<NiObject *> & missing_link_stack, const NifInfo & info ) const;' )
-        h.code( 'NIFLIB_HIDDEN string asString( bool verbose = false ) const;' )
+        HDR.code( 'NIFLIB_HIDDEN NifInfo Read( istream& in );' )
+        HDR.code( 'NIFLIB_HIDDEN void Write( ostream& out, const NifInfo & info = NifInfo() ) const;' )
+        HDR.code( 'NIFLIB_HIDDEN string asString( bool verbose = false ) const;' )
 
-    h.code( BEG_MISC )
+    if n == "Footer":
+        HDR.code( 'NIFLIB_HIDDEN void Read( istream& in, list<unsigned int> & link_stack, const NifInfo & info );' )
+        HDR.code( 'NIFLIB_HIDDEN void Write( ostream& out, const map<NiObjectRef,unsigned int> & link_map, list<NiObject *> & missing_link_stack, const NifInfo & info ) const;' )
+        HDR.code( 'NIFLIB_HIDDEN string asString( bool verbose = false ) const;' )
+
+    HDR.code( BEG_MISC )
 
     #Preserve Custom code from before
-    for l in custom_lines['MISC']:
-        h.write(l);
-        
-    h.code( END_CUSTOM )
+    for line in custom_lines['MISC']:
+        HDR.write(line)
+
+    HDR.code( END_CUSTOM )
 
     # done
-    h.code("};")
-    h.code()
-    h.end()
+    HDR.code("};")
+    HDR.code()
+    HDR.end()
 
     if not x.template:
         #Get existing custom code
         file_name = ROOT_DIR + '/src/gen/' + x.cname + '.cpp'
-        custom_lines = ExtractCustomCode( file_name );
+        custom_lines = extract_custom_code( file_name )
 
-        cpp = CFile(io.open(file_name, 'wb'))
-        cpp.code( partgen_notice )
-        cpp.code()
-        cpp.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
-        cpp.code( "using namespace Niflib;" )
-        cpp.code()
-        cpp.code( '//Constructor' )
-        
+        CPP = CFile(io.open(file_name, 'wb'))
+        CPP.code( PARTGEN_NOTICE )
+        CPP.code()
+        CPP.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
+        CPP.code( "using namespace Niflib;" )
+        CPP.code()
+        CPP.code( '//Constructor' )
+
         # constructor
         x_code_construct = x.code_construct()
         #if x_code_construct:
-        cpp.code("%s::%s()"%(x.cname,x.cname) + x_code_construct + " {};")
-        cpp.code()
+        CPP.code("%s::%s()"%(x.cname,x.cname) + x_code_construct + " {};")
+        CPP.code()
 
-        cpp.code('//Copy Constructor')
-        cpp.code( '%s::%s( const %s & src ) {'%(x.cname,x.cname,x.cname) )
-        cpp.code( '*this = src;' )
-        cpp.code('};')
-        cpp.code()
+        CPP.code('//Copy Constructor')
+        CPP.code( '%s::%s( const %s & src ) {'%(x.cname,x.cname,x.cname) )
+        CPP.code( '*this = src;' )
+        CPP.code('};')
+        CPP.code()
 
-        cpp.code('//Copy Operator')
-        cpp.code( '%s & %s::operator=( const %s & src ) {'%(x.cname,x.cname,x.cname) )
+        CPP.code('//Copy Operator')
+        CPP.code( '%s & %s::operator=( const %s & src ) {'%(x.cname,x.cname,x.cname) )
         for m in x.members:
             if not m.is_duplicate:
-                cpp.code('this->%s = src.%s;'%(m.cname, m.cname) )
-        cpp.code('return *this;')
-        cpp.code('};')
-        cpp.code()
+                CPP.code('this->%s = src.%s;'%(m.cname, m.cname) )
+        CPP.code('return *this;')
+        CPP.code('};')
+        CPP.code()
 
-        cpp.code( '//Destructor' )
-        
+        CPP.code( '//Destructor' )
+
         # destructor
-        cpp.code("%s::~%s()"%(x.cname,x.cname) + " {};")
+        CPP.code("%s::~%s()"%(x.cname,x.cname) + " {};")
 
         # header and footer functions
         if n  == "Header":
-            cpp.code( 'NifInfo ' + x.cname + '::Read( istream& in ) {' )
-            cpp.code( '//Declare NifInfo structure' )
-            cpp.code( 'NifInfo info;' )
-            cpp.code()
-            cpp.stream(x, ACTION_READ)
-            cpp.code()
-            cpp.code( '//Copy info.version to local version var.' )
-            cpp.code( 'version = info.version;' )
-            cpp.code()
-            cpp.code( '//Fill out and return NifInfo structure.' )
-            cpp.code( 'info.userVersion = userVersion;' )
-            cpp.code( 'info.userVersion2 = userVersion2;' )
-            cpp.code( 'info.endian = EndianType(endianType);' )
-            cpp.code( 'info.creator = exportInfo.creator.str;' )
-            cpp.code( 'info.exportInfo1 = exportInfo.exportInfo1.str;' )
-            cpp.code( 'info.exportInfo2 = exportInfo.exportInfo2.str;' )
-            cpp.code()
-            cpp.code( 'return info;' )
-            cpp.code()
-            cpp.code( '}' )
-            cpp.code()
-            cpp.code( 'void ' + x.cname + '::Write( ostream& out, const NifInfo & info ) const {' )
-            cpp.stream(x, ACTION_WRITE)
-            cpp.code( '}' )
-            cpp.code()
-            cpp.code( 'string ' + x.cname + '::asString( bool verbose ) const {' )
-            cpp.stream(x, ACTION_OUT)
-            cpp.code( '}' )
-        
-        if n == "Footer":
-            cpp.code()
-            cpp.code( 'void ' + x.cname + '::Read( istream& in, list<unsigned int> & link_stack, const NifInfo & info ) {' )
-            cpp.stream(x, ACTION_READ)
-            cpp.code( '}' )
-            cpp.code()
-            cpp.code( 'void ' + x.cname + '::Write( ostream& out, const map<NiObjectRef,unsigned int> & link_map, list<NiObject *> & missing_link_stack, const NifInfo & info ) const {' )
-            cpp.stream(x, ACTION_WRITE)
-            cpp.code( '}' )
-            cpp.code()
-            cpp.code( 'string ' + x.cname + '::asString( bool verbose ) const {' )
-            cpp.stream(x, ACTION_OUT)
-            cpp.code( '}' )
+            CPP.code( 'NifInfo ' + x.cname + '::Read( istream& in ) {' )
+            CPP.code( '//Declare NifInfo structure' )
+            CPP.code( 'NifInfo info;' )
+            CPP.code()
+            CPP.stream(x, ACTION_READ)
+            CPP.code()
+            CPP.code( '//Copy info.version to local version var.' )
+            CPP.code( 'version = info.version;' )
+            CPP.code()
+            CPP.code( '//Fill out and return NifInfo structure.' )
+            CPP.code( 'info.userVersion = userVersion;' )
+            CPP.code( 'info.userVersion2 = userVersion2;' )
+            CPP.code( 'info.endian = EndianType(endianType);' )
+            CPP.code( 'info.creator = exportInfo.creator.str;' )
+            CPP.code( 'info.exportInfo1 = exportInfo.exportInfo1.str;' )
+            CPP.code( 'info.exportInfo2 = exportInfo.exportInfo2.str;' )
+            CPP.code()
+            CPP.code( 'return info;' )
+            CPP.code()
+            CPP.code( '}' )
+            CPP.code()
+            CPP.code( 'void ' + x.cname + '::Write( ostream& out, const NifInfo & info ) const {' )
+            CPP.stream(x, ACTION_WRITE)
+            CPP.code( '}' )
+            CPP.code()
+            CPP.code( 'string ' + x.cname + '::asString( bool verbose ) const {' )
+            CPP.stream(x, ACTION_OUT)
+            CPP.code( '}' )
 
-        cpp.code()
-        cpp.code( BEG_MISC )
+        if n == "Footer":
+            CPP.code()
+            CPP.code( 'void ' + x.cname + '::Read( istream& in, list<unsigned int> & link_stack, const NifInfo & info ) {' )
+            CPP.stream(x, ACTION_READ)
+            CPP.code( '}' )
+            CPP.code()
+            CPP.code( 'void ' + x.cname + '::Write( ostream& out, const map<NiObjectRef,unsigned int> & link_map, list<NiObject *> & missing_link_stack, const NifInfo & info ) const {' )
+            CPP.stream(x, ACTION_WRITE)
+            CPP.code( '}' )
+            CPP.code()
+            CPP.code( 'string ' + x.cname + '::asString( bool verbose ) const {' )
+            CPP.stream(x, ACTION_OUT)
+            CPP.code( '}' )
+
+        CPP.code()
+        CPP.code( BEG_MISC )
 
         #Preserve Custom code from before
-        for l in custom_lines['MISC']:
-            cpp.write(l);
-        
-        cpp.code( END_CUSTOM )
+        for line in custom_lines['MISC']:
+            CPP.write(line)
 
-        cpp.end()
+        CPP.code( END_CUSTOM )
+
+        CPP.end()
 
     # Write out Public Enumeration header Enumerations
 if GENALLFILES:
-    out = CFile(io.open(ROOT_DIR + '/include/gen/enums.h', 'wb'))
-    out.code( fullgen_notice )
-    out.guard( 'NIF_ENUMS' )
-    out.code()
-    out.include( '<iostream>' )
-    out.code( 'using namespace std;' )
-    out.code()
-    out.namespace( 'Niflib' )
-    out.code()
+    HDR = CFile(io.open(ROOT_DIR + '/include/gen/enums.h', 'wb'))
+    HDR.code( FULLGEN_NOTICE )
+    HDR.guard( 'NIF_ENUMS' )
+    HDR.code()
+    HDR.include( '<iostream>' )
+    HDR.code( 'using namespace std;' )
+    HDR.code()
+    HDR.namespace( 'Niflib' )
+    HDR.code()
     for n, x in itertools.chain(enum_types.items(), flag_types.items()):
-      if x.options:
-        if x.description:
-          out.comment(x.description)
-        out.code('enum %s {'%(x.cname))
-        for o in x.options:
-          out.code('%s = %s, /*!< %s */'%(o.cname, o.value, o.description))
-        out.code('};')
-        out.code()
-        out.code('ostream & operator<<( ostream & out, %s const & val );'%x.cname)
-        out.code()
-    out.end()
+        if x.options:
+            if x.description:
+                HDR.comment(x.description)
+            HDR.code('enum %s {'%(x.cname))
+            for o in x.options:
+                HDR.code('%s = %s, /*!< %s */'%(o.cname, o.value, o.description))
+            HDR.code('};')
+            HDR.code()
+            HDR.code('ostream & operator<<( ostream & out, %s const & val );'%x.cname)
+            HDR.code()
+    HDR.end()
 
     # Write out Internal Enumeration header (NifStream functions)
 if GENALLFILES:
-    out = CFile(io.open(ROOT_DIR + '/include/gen/enums_intl.h', 'wb'))
-    out.code( fullgen_notice )
-    out.guard( 'NIF_ENUMS_INTL' )
-    out.code()
-    out.include( '<iostream>' )
-    out.code( 'using namespace std;' )
-    out.code()
-    out.include('"../nif_basic_types.h"')
-    out.code()
-    out.namespace( 'Niflib' )
-    out.code()
+    HDR = CFile(io.open(ROOT_DIR + '/include/gen/enums_intl.h', 'wb'))
+    HDR.code( FULLGEN_NOTICE )
+    HDR.guard( 'NIF_ENUMS_INTL' )
+    HDR.code()
+    HDR.include( '<iostream>' )
+    HDR.code( 'using namespace std;' )
+    HDR.code()
+    HDR.include('"../nif_basic_types.h"')
+    HDR.code()
+    HDR.namespace( 'Niflib' )
+    HDR.code()
     for n, x in itertools.chain(enum_types.items(), flag_types.items()):
-      if x.options:
-        if x.description:
-            out.code()
-            out.code( '//---' + x.cname + '---//')
-            out.code()
-        out.code('void NifStream( %s & val, istream& in, const NifInfo & info = NifInfo() );'%x.cname)
-        out.code('void NifStream( %s const & val, ostream& out, const NifInfo & info = NifInfo() );'%x.cname)
-        out.code()
-    out.end()
+        if x.options:
+            if x.description:
+                HDR.code()
+                HDR.code( '//---' + x.cname + '---//')
+                HDR.code()
+            HDR.code('void NifStream( %s & val, istream& in, const NifInfo & info = NifInfo() );'%x.cname)
+            HDR.code('void NifStream( %s const & val, ostream& out, const NifInfo & info = NifInfo() );'%x.cname)
+            HDR.code()
+    HDR.end()
 
     #Write out Enumeration Implementation
 if GENALLFILES:
-    out = CFile(io.open(ROOT_DIR + '/src/gen/enums.cpp', 'wb'))
-    out.code( fullgen_notice )
-    out.code()
-    out.include('<string>')
-    out.include('<iostream>')
-    out.include('"../../include/NIF_IO.h"')
-    out.include('"../../include/gen/enums.h"')
-    out.include('"../../include/gen/enums_intl.h"')
-    out.code()
-    out.code('using namespace std;')
-    out.code()
-    out.namespace( 'Niflib' )
-    out.code()
-    out.code()
+    CPP = CFile(io.open(ROOT_DIR + '/src/gen/enums.cpp', 'wb'))
+    CPP.code( FULLGEN_NOTICE )
+    CPP.code()
+    CPP.include('<string>')
+    CPP.include('<iostream>')
+    CPP.include('"../../include/NIF_IO.h"')
+    CPP.include('"../../include/gen/enums.h"')
+    CPP.include('"../../include/gen/enums_intl.h"')
+    CPP.code()
+    CPP.code('using namespace std;')
+    CPP.code()
+    CPP.namespace( 'Niflib' )
+    CPP.code()
+    CPP.code()
     for n, x in itertools.chain(enum_types.items(), flag_types.items()):
-      if x.options:
-        out.code( enum_impl.format(x.cname, x.storage, r''.join((enum_impl_case.format(o.cname, o.name) for o in x.options))) )
-        out.code()
-    out.end()
+        if x.options:
+            CPP.code( ENUM_IMPL.format(x.cname, x.storage, r''.join((ENUM_IMPL_CASE.format(o.cname, o.name) for o in x.options))) )
+            CPP.code()
+    CPP.end()
 
     #
     # NiObject Registration Function
     #
-    out = CFile(io.open(ROOT_DIR + '/src/gen/register.cpp', 'wb'))
-    out.code( fullgen_notice )
-    out.code()
-    out.include( '"../../include/ObjectRegistry.h"' )
+    CPP = CFile(io.open(ROOT_DIR + '/src/gen/register.cpp', 'wb'))
+    CPP.code( FULLGEN_NOTICE )
+    CPP.code()
+    CPP.include( '"../../include/ObjectRegistry.h"' )
     for n in block_names:
         x = block_types[n]
-        out.include( '"../../include/obj/' + x.cname + '.h"' )
-    out.code()
-    out.namespace( 'Niflib' )
-    out.code( 'void RegisterObjects() {' )
-    out.code()
+        CPP.include( '"../../include/obj/' + x.cname + '.h"' )
+    CPP.code()
+    CPP.namespace( 'Niflib' )
+    CPP.code( 'void RegisterObjects() {' )
+    CPP.code()
     for n in block_names:
         x = block_types[n]
-        out.code( 'ObjectRegistry::RegisterObject( "' + x.name + '", ' + x.cname + '::Create );' )
-    out.code()
-    out.code( '}' )
-    out.end()
-    
+        CPP.code( 'ObjectRegistry::RegisterObject( "' + x.name + '", ' + x.cname + '::Create );' )
+    CPP.code()
+    CPP.code( '}' )
+    CPP.end()
 
 #
 # NiObject Files
@@ -1171,98 +1180,97 @@ for n in block_names:
 
     if not GENALLFILES and not x.cname in GENBLOCKS:
         continue
-    
+
     #
     # NiObject Header File
     #
 
     #Get existing custom code
     file_name = ROOT_DIR + '/include/obj/' + x.cname + '.h'
-    custom_lines = ExtractCustomCode( file_name );
+    custom_lines = extract_custom_code( file_name )
 
     #output new file
-    out = CFile(io.open(file_name, 'wb'))
-    out.code( partgen_notice )
-    out.guard( x.cname.upper() )
-    out.code()
-    out.code( BEG_HEAD )
+    HDR = CFile(io.open(file_name, 'wb'))
+    HDR.code( PARTGEN_NOTICE )
+    HDR.guard( x.cname.upper() )
+    HDR.code()
+    HDR.code( BEG_HEAD )
 
     #Preserve Custom code from before
-    for l in custom_lines['FILE HEAD']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code()
-    out.code( x.code_include_h() )
-    out.namespace( 'Niflib' )
+    for line in custom_lines['FILE HEAD']:
+        HDR.write(line)
+
+    HDR.code( END_CUSTOM )
+    HDR.code()
+    HDR.code( x.code_include_h() )
+    HDR.namespace( 'Niflib' )
     if not x.inherit:
-        out.code( 'using namespace std;' )
-    out.code( x.code_fwd_decl() )
-    out.code( 'class ' + x.cname + ';' )
-    out.code( 'typedef Ref<' + x.cname + '> ' + x.cname + 'Ref;' )
-    out.code()
-    out.comment( x.description )
+        HDR.code( 'using namespace std;' )
+    HDR.code( x.code_fwd_decl() )
+    HDR.code( 'class ' + x.cname + ';' )
+    HDR.code( 'typedef Ref<' + x.cname + '> ' + x.cname + 'Ref;' )
+    HDR.code()
+    HDR.comment( x.description )
     if x.inherit:
-        out.code( 'class ' + x.cname + ' : public ' + x.inherit.cname + ' {' )
+        HDR.code( 'class ' + x.cname + ' : public ' + x.inherit.cname + ' {' )
     else:
-        out.code( 'class ' + x.cname + ' : public RefObject {' )
-    
-    out.code( 'public:' )
-    out.code( classdecl.format(x.cname) )
-    out.code()
+        HDR.code( 'class ' + x.cname + ' : public RefObject {' )
+    HDR.code( 'public:' )
+    HDR.code( CLASS_DECL.format(x.cname) )
+    HDR.code()
 
     #
     # Show example naive implementation if requested
     #
-    
+
     # Create a list of members eligable for functions
     if GENACCESSORS:
         func_members = []
-        for y in x.members:
-            if not y.arr1_ref and not y.arr2_ref and y.cname.lower().find("unk") == -1:
-                func_members.append(y)
-    
-        if len(func_members) > 0:
-            out.code( '/***Begin Example Naive Implementation****' )
-            out.code()
-            for y in func_members:
-                out.comment( y.description + "\n\\return The current value.", False )
-                out.code( y.getter_declare("", ";") )
-                out.code()
-                out.comment( y.description + "\n\\param[in] value The new value.", False )
-                out.code(  y.setter_declare("", ";") )
-                out.code()
-            out.code( '****End Example Naive Implementation***/' )
+        for bmem in x.members:
+            if not bmem.arr1_ref and not bmem.arr2_ref and bmem.cname.lower().find("unk") == -1:
+                func_members.append(bmem)
+
+        if func_members:
+            HDR.code( '/***Begin Example Naive Implementation****' )
+            HDR.code()
+            for fmem in func_members:
+                HDR.comment( fmem.description + "\n\\return The current value.", False )
+                HDR.code( fmem.getter_declare("", ";") )
+                HDR.code()
+                HDR.comment( fmem.description + "\n\\param[in] value The new value.", False )
+                HDR.code(  fmem.setter_declare("", ";") )
+                HDR.code()
+            HDR.code( '****End Example Naive Implementation***/' )
         else:
-            out.code ( '//--This object has no eligible attributes.  No example implementation generated--//' )
-        out.code()
-    
-    out.code( BEG_MISC )
+            HDR.code ( '//--This object has no eligible attributes.  No example implementation generated--//' )
+        HDR.code()
+
+    HDR.code( BEG_MISC )
 
     #Preserve Custom code from before
-    for l in custom_lines['MISC']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
+    for line in custom_lines['MISC']:
+        HDR.write(line)
+
+    HDR.code( END_CUSTOM )
     if x.members:
-        out.code( 'protected:' )
-    out.declare(x)
-    out.code( 'public:' )
-    out.code( classinternal )
-    out.code( '};' )
-    out.code()
-    out.code( BEG_FOOT )
+        HDR.code( 'protected:' )
+    HDR.declare(x)
+    HDR.code( 'public:' )
+    HDR.code( CLASS_INTL )
+    HDR.code( '};' )
+    HDR.code()
+    HDR.code( BEG_FOOT )
 
     #Preserve Custom code from before
-    for l in custom_lines['FILE FOOT']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code()
-    out.end()
+    for line in custom_lines['FILE FOOT']:
+        HDR.write(line)
+
+    HDR.code( END_CUSTOM )
+    HDR.code()
+    HDR.end()
 
     ##Check if the temp file is identical to the target file
-    #OverwriteIfChanged( file_name, 'temp' )
+    #overwrite_if_changed( file_name, 'temp' )
 
     #
     # NiObject Implementation File
@@ -1270,193 +1278,192 @@ for n in block_names:
 
     #Get existing custom code
     file_name = ROOT_DIR + '/src/obj/' + x.cname + '.cpp'
-    custom_lines = ExtractCustomCode( file_name );
-    
-    out = CFile(io.open(file_name, 'wb'))
-    out.code( partgen_notice )
-    out.code()
-    out.code( BEG_HEAD )
+    custom_lines = extract_custom_code( file_name )
+
+    CPP = CFile(io.open(file_name, 'wb'))
+    CPP.code( PARTGEN_NOTICE )
+    CPP.code()
+    CPP.code( BEG_HEAD )
 
     #Preserve Custom code from before
-    for l in custom_lines['FILE HEAD']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code()
-    out.include( '"../../include/FixLink.h"' )
-    out.include( '"../../include/ObjectRegistry.h"' )
-    out.include( '"../../include/NIF_IO.h"' )
-    out.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
-    out.code( "using namespace Niflib;" );
-    out.code()
-    out.code( '//Definition of TYPE constant' )
+    for line in custom_lines['FILE HEAD']:
+        CPP.write(line)
+
+    CPP.code( END_CUSTOM )
+    CPP.code()
+    CPP.include( '"../../include/FixLink.h"' )
+    CPP.include( '"../../include/ObjectRegistry.h"' )
+    CPP.include( '"../../include/NIF_IO.h"' )
+    CPP.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
+    CPP.code( "using namespace Niflib;" )
+    CPP.code()
+    CPP.code( '//Definition of TYPE constant' )
     if x.inherit:
-        out.code ( 'const Type ' + x.cname + '::TYPE(\"' + x.name + '\", &' + x.inherit.cname + '::TYPE );' )
+        CPP.code ( 'const Type ' + x.cname + '::TYPE(\"' + x.name + '\", &' + x.inherit.cname + '::TYPE );' )
     else:
-        out.code ( 'const Type ' + x.cname + '::TYPE(\"' + x.name + '\", &RefObject::TYPE );' )
-    out.code()
+        CPP.code ( 'const Type ' + x.cname + '::TYPE(\"' + x.name + '\", &RefObject::TYPE );' )
+    CPP.code()
     x_code_construct = x.code_construct()
     if x_code_construct:
-        out.code( x.cname + '::' + x.cname + '()' + x_code_construct + ' {' )
+        CPP.code( x.cname + '::' + x.cname + '()' + x_code_construct + ' {' )
     else:
-        out.code( x.cname + '::' + x.cname + '() {' )
-    out.code ( BEG_CTOR )
+        CPP.code( x.cname + '::' + x.cname + '() {' )
+    CPP.code ( BEG_CTOR )
 
     #Preserve Custom code from before
-    for l in custom_lines['CONSTRUCTOR']:
-        out.write(l);
-        
-    out.code ( END_CUSTOM )
-    out.code ( '}' )
-    
-    out.code()
-    out.code( x.cname + '::' + '~' + x.cname + '() {' )
-    out.code ( BEG_DTOR )
+    for line in custom_lines['CONSTRUCTOR']:
+        CPP.write(line)
+
+    CPP.code ( END_CUSTOM )
+    CPP.code ( '}' )
+
+    CPP.code()
+    CPP.code( x.cname + '::' + '~' + x.cname + '() {' )
+    CPP.code ( BEG_DTOR )
 
     #Preserve Custom code from before
-    for l in custom_lines['DESTRUCTOR']:
-        out.write(l);
-        
-    out.code ( END_CUSTOM )
-    out.code ( '}' )
-    out.code() 
-    out.code( 'const Type & %s::GetType() const {'%x.cname )
-    out.code( 'return TYPE;' )
-    out.code( '}' )
-    out.code()
-    out.code( 'NiObject * ' + x.cname + '::Create() {' )
-    out.code( 'return new ' + x.cname + ';' )
-    out.code( '}' )
-    out.code()
+    for line in custom_lines['DESTRUCTOR']:
+        CPP.write(line)
 
-    out.code("void %s::Read( istream& in, list<unsigned int> & link_stack, const NifInfo & info ) {"%x.cname)
-    out.code( BEG_PRE_READ )
+    CPP.code ( END_CUSTOM )
+    CPP.code ( '}' )
+    CPP.code()
+    CPP.code( 'const Type & %s::GetType() const {'%x.cname )
+    CPP.code( 'return TYPE;' )
+    CPP.code( '}' )
+    CPP.code()
+    CPP.code( 'NiObject * ' + x.cname + '::Create() {' )
+    CPP.code( 'return new ' + x.cname + ';' )
+    CPP.code( '}' )
+    CPP.code()
 
-    #Preserve Custom code from before
-    for l in custom_lines['PRE-READ']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code()
-    out.stream(x, ACTION_READ)
-    out.code()
-    out.code( BEG_POST_READ )
+    CPP.code("void %s::Read( istream& in, list<unsigned int> & link_stack, const NifInfo & info ) {"%x.cname)
+    CPP.code( BEG_PRE_READ )
 
     #Preserve Custom code from before
-    for l in custom_lines['POST-READ']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code("}")
-    out.code()
-      
-    out.code("void %s::Write( ostream& out, const map<NiObjectRef,unsigned int> & link_map, list<NiObject *> & missing_link_stack, const NifInfo & info ) const {"%x.cname)
-    out.code( BEG_PRE_WRITE )
+    for line in custom_lines['PRE-READ']:
+        CPP.write(line)
+
+    CPP.code( END_CUSTOM )
+    CPP.code()
+    CPP.stream(x, ACTION_READ)
+    CPP.code()
+    CPP.code( BEG_POST_READ )
 
     #Preserve Custom code from before
-    for l in custom_lines['PRE-WRITE']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code()
-    out.stream(x, ACTION_WRITE)
-    out.code()
-    out.code( BEG_POST_WRITE )
+    for line in custom_lines['POST-READ']:
+        CPP.write(line)
+
+    CPP.code( END_CUSTOM )
+    CPP.code("}")
+    CPP.code()
+
+    CPP.code("void %s::Write( ostream& out, const map<NiObjectRef,unsigned int> & link_map, list<NiObject *> & missing_link_stack, const NifInfo & info ) const {"%x.cname)
+    CPP.code( BEG_PRE_WRITE )
 
     #Preserve Custom code from before
-    for l in custom_lines['POST-WRITE']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code("}")
-    out.code()
-      
-    out.code("std::string %s::asString( bool verbose ) const {"%x.cname)
-    out.code( BEG_PRE_STRING )
+    for line in custom_lines['PRE-WRITE']:
+        CPP.write(line)
+
+    CPP.code( END_CUSTOM )
+    CPP.code()
+    CPP.stream(x, ACTION_WRITE)
+    CPP.code()
+    CPP.code( BEG_POST_WRITE )
 
     #Preserve Custom code from before
-    for l in custom_lines['PRE-STRING']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code()
-    out.stream(x, ACTION_OUT)
-    out.code()
-    out.code( BEG_POST_STRING )
+    for line in custom_lines['POST-WRITE']:
+        CPP.write(line)
+
+    CPP.code( END_CUSTOM )
+    CPP.code("}")
+    CPP.code()
+
+    CPP.code("std::string %s::asString( bool verbose ) const {"%x.cname)
+    CPP.code( BEG_PRE_STRING )
 
     #Preserve Custom code from before
-    for l in custom_lines['POST-STRING']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code("}")
-    out.code()
+    for line in custom_lines['PRE-STRING']:
+        CPP.write(line)
 
-    out.code("void %s::FixLinks( const map<unsigned int,NiObjectRef> & objects, list<unsigned int> & link_stack, list<NiObjectRef> & missing_link_stack, const NifInfo & info ) {"%x.cname)
+    CPP.code( END_CUSTOM )
+    CPP.code()
+    CPP.stream(x, ACTION_OUT)
+    CPP.code()
+    CPP.code( BEG_POST_STRING )
 
-    out.code( BEG_PRE_FIXLINK )
-    
     #Preserve Custom code from before
-    for l in custom_lines['PRE-FIXLINKS']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code()
-    out.stream(x, ACTION_FIXLINKS)
-    out.code()
-    out.code( BEG_POST_FIXLINK )
+    for line in custom_lines['POST-STRING']:
+        CPP.write(line)
+
+    CPP.code( END_CUSTOM )
+    CPP.code("}")
+    CPP.code()
+
+    CPP.code("void %s::FixLinks( const map<unsigned int,NiObjectRef> & objects, list<unsigned int> & link_stack, list<NiObjectRef> & missing_link_stack, const NifInfo & info ) {"%x.cname)
+
+    CPP.code( BEG_PRE_FIXLINK )
+
     #Preserve Custom code from before
-    for l in custom_lines['POST-FIXLINKS']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
-    out.code("}")
-    out.code()
+    for line in custom_lines['PRE-FIXLINKS']:
+        CPP.write(line)
 
-    out.code("std::list<NiObjectRef> %s::GetRefs() const {"%x.cname)
-    out.stream(x, ACTION_GETREFS)
-    out.code("}")
-    out.code()
+    CPP.code( END_CUSTOM )
+    CPP.code()
+    CPP.stream(x, ACTION_FIXLINKS)
+    CPP.code()
+    CPP.code( BEG_POST_FIXLINK )
+    #Preserve Custom code from before
+    for line in custom_lines['POST-FIXLINKS']:
+        CPP.write(line)
 
-    out.code("std::list<NiObject *> %s::GetPtrs() const {"%x.cname)
-    out.stream(x, ACTION_GETPTRS)
-    out.code("}")
-    out.code()
+    CPP.code( END_CUSTOM )
+    CPP.code("}")
+    CPP.code()
+
+    CPP.code("std::list<NiObjectRef> %s::GetRefs() const {"%x.cname)
+    CPP.stream(x, ACTION_GETREFS)
+    CPP.code("}")
+    CPP.code()
+
+    CPP.code("std::list<NiObject *> %s::GetPtrs() const {"%x.cname)
+    CPP.stream(x, ACTION_GETPTRS)
+    CPP.code("}")
+    CPP.code()
 
     # Output example implementation of public getter/setter Mmthods if requested
     if GENACCESSORS:
         func_members = []
-        for y in x.members:
-            if not y.arr1_ref and not y.arr2_ref and y.cname.lower().find("unk") == -1:
-                func_members.append(y)
-    
-        if len(func_members) > 0:
-            out.code( '/***Begin Example Naive Implementation****' )
-            out.code()
-            for y in func_members:
-                out.code( y.getter_declare(x.name + "::", " {") )
-                out.code( "return %s;"%y.cname )
-                out.code( "}" )
-                out.code()
-                
-                out.code( y.setter_declare(x.name + "::", " {") )
-                out.code( "%s = value;"%y.cname )
-                out.code( "}" )
-                out.code()
-            out.code( '****End Example Naive Implementation***/' )
+        for bmem in x.members:
+            if not bmem.arr1_ref and not bmem.arr2_ref and bmem.cname.lower().find("unk") == -1:
+                func_members.append(bmem)
+
+        if func_members:
+            CPP.code( '/***Begin Example Naive Implementation****' )
+            CPP.code()
+            for fmem in func_members:
+                CPP.code( fmem.getter_declare(x.name + "::", " {") )
+                CPP.code( "return %s;"%fmem.cname )
+                CPP.code( "}" )
+                CPP.code()
+                CPP.code( fmem.setter_declare(x.name + "::", " {") )
+                CPP.code( "%s = value;"%fmem.cname )
+                CPP.code( "}" )
+                CPP.code()
+            CPP.code( '****End Example Naive Implementation***/' )
         else:
-            out.code ( '//--This object has no eligible attributes.  No example implementation generated--//' )
-        out.code()
-        
-    out.code( BEG_MISC )
+            CPP.code ( '//--This object has no eligible attributes.  No example implementation generated--//' )
+        CPP.code()
+
+    CPP.code( BEG_MISC )
 
     #Preserve Custom code from before
-    for l in custom_lines['MISC']:
-        out.write(l);
-        
-    out.code( END_CUSTOM )
+    for line in custom_lines['MISC']:
+        CPP.write(line)
+
+    CPP.code( END_CUSTOM )
 
     ##Check if the temp file is identical to the target file
-    #OverwriteIfChanged( file_name, 'temp' )
+    #overwrite_if_changed( file_name, 'temp' )
 
-    out.end()
+    CPP.end()
