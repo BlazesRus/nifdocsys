@@ -99,50 +99,7 @@ flag_names = []
 block_names = []
 version_names = []
 
-NATIVETYPES = {
-    'bool' : 'bool',
-    'byte' : 'byte',
-    'uint' : 'unsigned int',
-    'ulittle32' : 'unsigned int',
-    'ushort' : 'unsigned short',
-    'int' : 'int',
-    'short' : 'short',
-    'BlockTypeIndex' : 'unsigned short',
-    'char' : 'byte',
-    'FileVersion' : 'unsigned int',
-    'Flags' : 'unsigned short',
-    'float' : 'float',
-    'hfloat' : 'hfloat',
-    'HeaderString' : 'HeaderString',
-    'LineString' : 'LineString',
-    'Ptr' : '*',
-    'Ref' : 'Ref',
-    'StringOffset' : 'unsigned int',
-    'StringIndex' : 'IndexString',
-    'SizedString' : 'string',
-    'string' : 'IndexString',
-    'Color3' : 'Color3',
-    'Color4' : 'Color4',
-    #'ByteColor3' : 'ByteColor3', # TODO: Niflib type
-    'ByteColor4' : 'ByteColor4',
-    'FilePath' : 'IndexString',
-    'Vector3' : 'Vector3',
-    'Vector4' : 'Vector4',
-    'Quaternion' : 'Quaternion',
-    'Matrix22' : 'Matrix22',
-    'Matrix33' : 'Matrix33',
-    'Matrix34' : 'Matrix34',
-    'Matrix44' : 'Matrix44',
-    'hkMatrix3' : 'InertiaMatrix',
-    'ShortString' : 'ShortString',
-    'Key' : 'Key',
-    'QuatKey' : 'Key',
-    'TexCoord' : 'TexCoord',
-    'Triangle' : 'Triangle',
-    'BSVertexData' : 'BSVertexData',
-    'BSVertexDataSSE' : 'BSVertexData',
-    #'BSVertexDesc' : 'BSVertexDesc'
-}
+NATIVETYPES = {}
 
 #
 # HTML Template class
@@ -170,7 +127,8 @@ class Template:
 
         #Loop through all variables, replacing them in the template text
         for i in self.vars:
-            txt = txt.replace('{' + i + '}', self.vars[i].encode('utf-8').decode('utf-8', 'strict'))
+            if self.vars[i] is not None:
+                txt = txt.replace('{' + i + '}', self.vars[i].encode('utf-8').decode('utf-8', 'strict'))
 
         #return result
         return txt
@@ -910,109 +868,6 @@ class Member:
         self.carr2_ref = [member_name(n) for n in self.arr2_ref]
         self.ccond_ref = [member_name(n) for n in self.cond_ref]
 
-    def code_construct(self):
-        """
-        Class construction
-        don't construct anything that hasn't been declared
-        don't construct if it has no default
-        """
-        if self.default and not self.is_duplicate:
-            return "%s(%s)"%(self.cname, self.default)
-
-    def code_declare(self, prefix=""):
-        """
-        Class member declaration
-        prefix is used to tag local variables only
-        """
-        result = self.ctype
-        suffix1 = ""
-        suffix2 = ""
-        keyword = ""
-        if not self.is_duplicate: # is dimension for one or more arrays
-            if self.arr1_ref:
-                if not self.arr1 or not self.arr1.lhs: # Simple Scalar
-                    keyword = "mutable "
-            elif self.arr2_ref: # 1-dimensional dynamic array
-                keyword = "mutable "
-            elif self.is_calculated:
-                keyword = "mutable "
-
-        if self.ctemplate:
-            if result != "*":
-                result += "<%s >"%self.ctemplate
-            else:
-                result = "%s *"%self.ctemplate
-        if self.arr1.lhs:
-            if self.arr1.lhs.isdigit():
-                if self.arr2.lhs and self.arr2.lhs.isdigit():
-                    result = "array< %s, array<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
-                else:
-                    result = "array<%s,%s >"%(self.arr1.lhs, result)
-            else:
-                if self.arr2.lhs and self.arr2.lhs.isdigit():
-                    result = "vector< array<%s,%s > >"%(self.arr2.lhs, result)
-                else:
-                    if self.arr2.lhs:
-                        result = "vector< vector<%s > >"%result
-                    else:
-                        result = "vector<%s >"%result
-        result = keyword + result + " " + prefix + self.cname + suffix1 + suffix2 + ";"
-        return result
-
-    def getter_declare(self, scope="", suffix=""):
-        """Getter member function declaration."""
-        ltype = self.ctype
-        if self.ctemplate:
-            if ltype != "*":
-                ltype += "<%s >"%self.ctemplate
-            else:
-                ltype = "%s *"%self.ctemplate
-        if self.arr1.lhs:
-            if self.arr1.lhs.isdigit():
-                ltype = "array<%s,%s > "%(self.arr1.lhs, ltype)
-                # ltype = ltype
-            else:
-                if self.arr2.lhs and self.arr2.lhs.isdigit():
-                    ltype = "vector< array<%s,%s > >"%(self.arr2.lhs, ltype)
-                else:
-                    ltype = "vector<%s >"%ltype
-            if self.arr2.lhs:
-                if self.arr2.lhs.isdigit():
-                    if self.arr1.lhs.isdigit():
-                        ltype = "array<%s,%s >"%(self.arr2.lhs, ltype)
-                        # ltype = ltype
-                else:
-                    ltype = "vector<%s >"%ltype
-        result = ltype + " " + scope + "Get" + self.cname[0:1].upper() + self.cname[1:] + "() const" + suffix
-        return result
-
-    def setter_declare(self, scope="", suffix=""):
-        """Setter member function declaration."""
-        ltype = self.ctype
-        if self.ctemplate:
-            if ltype != "*":
-                ltype += "<%s >"%self.ctemplate
-            else:
-                ltype = "%s *"%self.ctemplate
-        if self.arr1.lhs:
-            if self.arr1.lhs.isdigit():
-                # ltype = "const %s&"%ltype
-                if self.arr2.lhs and self.arr2.lhs.isdigit():
-                    ltype = "const array< %s, array<%s,%s > >&"%(self.arr1.lhs, self.arr2.lhs, ltype)
-                else:
-                    ltype = "const array<%s,%s >& "%(self.arr1.lhs, ltype)
-            else:
-                if self.arr2.lhs and self.arr2.lhs.isdigit():
-                    ltype = "const vector< array<%s,%s > >&"%(self.arr2.lhs, ltype)
-                else:
-                    ltype = "const vector<%s >&"%ltype
-        else:
-            if not self.type in basic_names:
-                ltype = "const %s &"%ltype
-
-        result = "void " + scope + "Set" + self.cname[0:1].upper() + self.cname[1:] + "( " + ltype + " value )" + suffix
-        return result
-
 class Version:
     """This class represents the nif.xml <version> tag."""
     def __init__(self, element):
@@ -1021,9 +876,7 @@ class Version:
 
 class Basic:
     """This class represents the nif.xml <basic> tag."""
-    def __init__(self, element):
-        global native_types
-
+    def __init__(self, element, ntypes):
         self.name = element.getAttribute('name')
         assert self.name # debug
         self.cname = class_name(self.name)
@@ -1035,34 +888,35 @@ class Basic:
             self.description = ""
 
         self.count = element.getAttribute('count')
+        self.template = (element.getAttribute('istemplate') == "1")
+        self.options = []
 
         self.is_link = False
         self.is_crossref = False
         self.has_links = False
         self.has_crossrefs = False
 
-        self.nativetype = NATIVETYPES.get(self.name)
-        if self.nativetype:
-            native_types[self.name] = self.nativetype
-            if self.nativetype == "Ref":
-                self.is_link = True
-                self.has_links = True
-            if self.nativetype == "*":
-                self.is_crossref = True
-                self.has_crossrefs = True
-
-        self.template = (element.getAttribute('istemplate') == "1")
-        self.options = []
+        self.nativetype = None
+        if ntypes:
+            self.nativetype = ntypes.get(self.name)
+            if self.nativetype:
+                native_types[self.name] = self.nativetype
+                if self.nativetype == "Ref":
+                    self.is_link = True
+                    self.has_links = True
+                if self.nativetype == "*":
+                    self.is_crossref = True
+                    self.has_crossrefs = True
 
 class Enum(Basic):
     """This class represents the nif.xml <enum> tag."""
-    def __init__(self, element):
-        Basic.__init__(self, element)
+    def __init__(self, element, ntypes):
+        Basic.__init__(self, element, ntypes)
 
         self.storage = element.getAttribute('storage')
         self.prefix = element.getAttribute('prefix')
         # Find the native storage type
-        self.storage = basic_types[self.storage].nativetype
+        self.storage = basic_types[self.storage].nativetype if basic_types[self.storage].nativetype else basic_types[self.storage].name
         self.description = element.firstChild.nodeValue.strip()
 
         self.nativetype = self.cname
@@ -1076,23 +930,16 @@ class Enum(Basic):
 
 class Flag(Enum):
     """This class represents the nif.xml <bitflags> tag."""
-    def __init__(self, element):
-        Enum.__init__(self, element)
+    def __init__(self, element, ntypes):
+        Enum.__init__(self, element, ntypes)
         for option in self.options:
             option.bit = option.value
             option.value = 1 << int(option.value)
 
 class Compound(Basic):
     """This class represents the nif.xml <compound> tag."""
-    def __init__(self, element):
-        Basic.__init__(self, element)
-
-        #the relative path to files in the gen folder
-        self.gen_file_prefix = ""
-        #the relative path to files in the obj folder
-        self.obj_file_prefix = "../obj/"
-        #the relative path to files in the root folder
-        self.root_file_prefix = "../"
+    def __init__(self, element, ntypes):
+        Basic.__init__(self, element, ntypes)
 
         self.members = []     # list of all members (list of Member)
         self.argument = False # does it use an argument?
@@ -1150,99 +997,6 @@ class Compound(Basic):
                 elif outer == inner:
                     atx = True
 
-    def code_construct(self):
-        # constructor
-        result = ''
-        first = True
-        for mem in self.members:
-            y_code_construct = mem.code_construct()
-            if y_code_construct:
-                if not first:
-                    result += ', ' + y_code_construct
-                else:
-                    result += ' : ' + y_code_construct
-                    first = False
-        return result
-
-    def code_include_h(self):
-        if self.nativetype:
-            return ""
-
-        result = ""
-
-        # include all required structures
-        used_structs = []
-        for mem in self.members:
-            file_name = None
-            if mem.type != self.name:
-                if mem.type in compound_names:
-                    if not compound_types[mem.type].nativetype:
-                        file_name = "%s%s.h"%(self.gen_file_prefix, mem.ctype)
-                elif mem.type in basic_names:
-                    if basic_types[mem.type].nativetype == "Ref":
-                        file_name = "%sRef.h"%(self.root_file_prefix)
-            if file_name and file_name not in used_structs:
-                used_structs.append( file_name )
-        if used_structs:
-            result += "\n// Include structures\n"
-        for file_name in used_structs:
-            result += '#include "%s"\n'%file_name
-        return result
-
-    def code_fwd_decl(self):
-        if self.nativetype:
-            return ""
-        result = ""
-
-        # forward declaration of blocks
-        used_blocks = []
-        for mem in self.members:
-            if mem.template in block_names and mem.template != self.name:
-                if not mem.ctemplate in used_blocks:
-                    used_blocks.append( mem.ctemplate )
-        if used_blocks:
-            result += '\n// Forward define of referenced NIF objects\n'
-        for fwd_class in used_blocks:
-            result += 'class %s;\n'%fwd_class
-        return result
-
-    def code_include_cpp_set(self, usedirs=False, gen_dir=None, obj_dir=None):
-        if self.nativetype:
-            return ""
-
-        if not usedirs:
-            gen_dir = self.gen_file_prefix
-            obj_dir = self.obj_file_prefix
-
-        result = []
-
-        if self.name in compound_names:
-            result.append('#include "%s%s.h"\n'%(gen_dir, self.cname))
-        elif self.name in block_names:
-            result.append('#include "%s%s.h"\n'%(obj_dir, self.cname))
-        else: assert False # bug
-
-        # include referenced blocks
-        used_blocks = []
-        for mem in self.members:
-            if mem.template in block_names and mem.template != self.name:
-                file_name = '#include "%s%s.h"\n'%(obj_dir, mem.ctemplate)
-                if file_name not in used_blocks:
-                    used_blocks.append( file_name )
-            if mem.type in compound_names:
-                subblock = compound_types[mem.type]
-                used_blocks.extend(subblock.code_include_cpp_set(True, gen_dir, obj_dir))
-            for terminal in mem.cond.get_terminals():
-                if terminal in block_types:
-                    used_blocks.append('#include "%s%s.h"\n'%(obj_dir, terminal))
-        for file_name in sorted(set(used_blocks)):
-            result.append(file_name)
-
-        return result
-
-    def code_include_cpp(self, usedirs=False, gen_dir=None, obj_dir=None):
-        return ''.join(self.code_include_cpp_set(True, gen_dir, obj_dir))
-
     def find_member(self, name, inherit=False):
         """Find member by name"""
         for mem in self.members:
@@ -1268,13 +1022,8 @@ class Compound(Basic):
 
 class Block(Compound):
     """This class represents the nif.xml <niobject> tag."""
-    def __init__(self, element):
-        Compound.__init__(self, element)
-        #the relative path to files in the gen folder
-        self.gen_file_prefix = "../gen/"
-        #the relative path to files in the obj folder
-        self.obj_file_prefix = ""
-
+    def __init__(self, element, ntypes):
+        Compound.__init__(self, element, ntypes)
         self.is_ancestor = (element.getAttribute('abstract') == "1")
         inherit = element.getAttribute('inherit')
         if inherit:
@@ -1282,26 +1031,6 @@ class Block(Compound):
         else:
             self.inherit = None
         self.has_interface = (element.getElementsByTagName('interface') != [])
-
-    def code_include_h(self):
-        result = ""
-        if self.inherit:
-            result += '#include "%s.h"\n'%self.inherit.cname
-        else:
-            result += """#include "../RefObject.h"
-#include "../Type.h"
-#include "../Ref.h"
-#include "../nif_basic_types.h"
-#include <iostream>
-#include <fstream>
-#include <iomanip>
-#include <sstream>
-#include <string>
-#include <list>
-#include <map>
-#include <vector>"""
-        result += Compound.code_include_h(self)
-        return result
 
     # find member by name
     def find_member(self, name, inherit=False):
@@ -1335,37 +1064,38 @@ elif os.path.exists("nifxml/nif.xml"):
 else:
     raise ImportError("nif.xml not found")
 
-for el in XML.getElementsByTagName('version'):
-    x = Version(el)
-    version_types[x.num] = x
-    version_names.append(x.num)
+def parse_XML(ntypes=None):
+    for el in XML.getElementsByTagName('version'):
+        x = Version(el)
+        version_types[x.num] = x
+        version_names.append(x.num)
 
-for el in XML.getElementsByTagName('basic'):
-    x = Basic(el)
-    assert not x.name in basic_types
-    basic_types[x.name] = x
-    basic_names.append(x.name)
+    for el in XML.getElementsByTagName('basic'):
+        x = Basic(el, ntypes)
+        assert not x.name in basic_types
+        basic_types[x.name] = x
+        basic_names.append(x.name)
 
-for el in XML.getElementsByTagName('enum'):
-    x = Enum(el)
-    assert not x.name in enum_types
-    enum_types[x.name] = x
-    enum_names.append(x.name)
+    for el in XML.getElementsByTagName('enum'):
+        x = Enum(el, ntypes)
+        assert not x.name in enum_types
+        enum_types[x.name] = x
+        enum_names.append(x.name)
 
-for el in XML.getElementsByTagName('bitflags'):
-    x = Flag(el)
-    assert not x.name in flag_types
-    flag_types[x.name] = x
-    flag_names.append(x.name)
+    for el in XML.getElementsByTagName('bitflags'):
+        x = Flag(el, ntypes)
+        assert not x.name in flag_types
+        flag_types[x.name] = x
+        flag_names.append(x.name)
 
-for el in XML.getElementsByTagName("compound"):
-    x = Compound(el)
-    assert not x.name in compound_types
-    compound_types[x.name] = x
-    compound_names.append(x.name)
+    for el in XML.getElementsByTagName("compound"):
+        x = Compound(el, ntypes)
+        assert not x.name in compound_types
+        compound_types[x.name] = x
+        compound_names.append(x.name)
 
-for el in XML.getElementsByTagName("niobject"):
-    x = Block(el)
-    assert not x.name in block_types
-    block_types[x.name] = x
-    block_names.append(x.name)
+    for el in XML.getElementsByTagName("niobject"):
+        x = Block(el, ntypes)
+        assert not x.name in block_types
+        block_types[x.name] = x
+        block_names.append(x.name)

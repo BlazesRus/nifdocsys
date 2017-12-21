@@ -49,11 +49,36 @@
 # --------------------------------------------------------------------------
 
 from __future__ import unicode_literals
-from nifxml import *
+
 from distutils.dir_util import mkpath
+import sys
 import os
 import io
 import itertools
+
+from nifxml import Template
+from nifxml import block_types, basic_types, compound_types, enum_types, flag_types, version_types
+from nifxml import block_names, basic_names, compound_names, enum_names, flag_names, version_names
+from nifxml import parse_XML
+
+#
+# Parse the XML
+#
+
+parse_XML()
+
+assert version_types
+assert version_names
+assert basic_types
+assert basic_names
+assert compound_types
+assert compound_names
+assert block_types
+assert block_names
+assert enum_types
+assert enum_names
+assert flag_types
+assert flag_names
 
 #
 # global data

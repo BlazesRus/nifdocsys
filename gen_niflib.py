@@ -84,10 +84,334 @@ import os
 import io
 import itertools
 
-from nifxml import Block, native_types, NATIVETYPES
-from nifxml import block_types, basic_types, compound_types, enum_types, flag_types
-from nifxml import block_names, compound_names
-from nifxml import scanBrackets, define_name
+from nifxml import Member, Compound, Block, native_types, NATIVETYPES
+from nifxml import block_types, basic_types, compound_types, enum_types, flag_types, version_types
+from nifxml import block_names, basic_names, compound_names, enum_names, flag_names, version_names
+from nifxml import scanBrackets, define_name, parse_XML
+
+
+# The relative path to the project root for compounds and NiObjects (Compound and Block)
+ROOT_FILE_PREFIX = "../"
+
+# The relative path to NiObject for compounds (Block and Compound)
+CMP_OBJ_FILE_PREFIX = "../obj/"
+CMP_GEN_FILE_PREFIX = ""
+
+# The relative path to compounds for NiObject (Compound and Block)
+BLK_GEN_FILE_PREFIX = "../gen/"
+BLK_OBJ_FILE_PREFIX = ""
+
+# The XML to niflib type mapping
+NATIVETYPES = {
+    'bool' : 'bool',
+    'byte' : 'byte',
+    'uint' : 'unsigned int',
+    'ulittle32' : 'unsigned int',
+    'ushort' : 'unsigned short',
+    'int' : 'int',
+    'short' : 'short',
+    'BlockTypeIndex' : 'unsigned short',
+    'char' : 'byte',
+    'FileVersion' : 'unsigned int',
+    'Flags' : 'unsigned short',
+    'float' : 'float',
+    'hfloat' : 'hfloat',
+    'HeaderString' : 'HeaderString',
+    'LineString' : 'LineString',
+    'Ptr' : '*',
+    'Ref' : 'Ref',
+    'StringOffset' : 'unsigned int',
+    'StringIndex' : 'IndexString',
+    'SizedString' : 'string',
+    'string' : 'IndexString',
+    'Color3' : 'Color3',
+    'Color4' : 'Color4',
+    #'ByteColor3' : 'ByteColor3', # TODO: Niflib type
+    'ByteColor4' : 'ByteColor4',
+    'FilePath' : 'IndexString',
+    'Vector3' : 'Vector3',
+    'Vector4' : 'Vector4',
+    'Quaternion' : 'Quaternion',
+    'Matrix22' : 'Matrix22',
+    'Matrix33' : 'Matrix33',
+    'Matrix34' : 'Matrix34',
+    'Matrix44' : 'Matrix44',
+    'hkMatrix3' : 'InertiaMatrix',
+    'ShortString' : 'ShortString',
+    'Key' : 'Key',
+    'QuatKey' : 'Key',
+    'TexCoord' : 'TexCoord',
+    'Triangle' : 'Triangle',
+    'BSVertexData' : 'BSVertexData',
+    'BSVertexDataSSE' : 'BSVertexData',
+    #'BSVertexDesc' : 'BSVertexDesc'
+}
+
+#
+# Member Patching
+#
+
+def member_code_construct(self):
+    """
+    Class construction
+    don't construct anything that hasn't been declared
+    don't construct if it has no default
+    """
+    if self.default and not self.is_duplicate:
+        return "%s(%s)"%(self.cname, self.default)
+
+def member_code_declare(self, prefix=""):
+    """
+    Class member declaration
+    prefix is used to tag local variables only
+    """
+    result = self.ctype
+    suffix1 = ""
+    suffix2 = ""
+    keyword = ""
+    if not self.is_duplicate: # is dimension for one or more arrays
+        if self.arr1_ref:
+            if not self.arr1 or not self.arr1.lhs: # Simple Scalar
+                keyword = "mutable "
+        elif self.arr2_ref: # 1-dimensional dynamic array
+            keyword = "mutable "
+        elif self.is_calculated:
+            keyword = "mutable "
+
+    if self.ctemplate:
+        if result != "*":
+            result += "<%s >"%self.ctemplate
+        else:
+            result = "%s *"%self.ctemplate
+    if self.arr1.lhs:
+        if self.arr1.lhs.isdigit():
+            if self.arr2.lhs and self.arr2.lhs.isdigit():
+                result = "array< %s, array<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
+            else:
+                result = "array<%s,%s >"%(self.arr1.lhs, result)
+        else:
+            if self.arr2.lhs and self.arr2.lhs.isdigit():
+                result = "vector< array<%s,%s > >"%(self.arr2.lhs, result)
+            else:
+                if self.arr2.lhs:
+                    result = "vector< vector<%s > >"%result
+                else:
+                    result = "vector<%s >"%result
+    result = keyword + result + " " + prefix + self.cname + suffix1 + suffix2 + ";"
+    return result
+
+def member_getter_declare(self, scope="", suffix=""):
+    """Getter member function declaration."""
+    ltype = self.ctype
+    if self.ctemplate:
+        if ltype != "*":
+            ltype += "<%s >"%self.ctemplate
+        else:
+            ltype = "%s *"%self.ctemplate
+    if self.arr1.lhs:
+        if self.arr1.lhs.isdigit():
+            ltype = "array<%s,%s > "%(self.arr1.lhs, ltype)
+            # ltype = ltype
+        else:
+            if self.arr2.lhs and self.arr2.lhs.isdigit():
+                ltype = "vector< array<%s,%s > >"%(self.arr2.lhs, ltype)
+            else:
+                ltype = "vector<%s >"%ltype
+        if self.arr2.lhs:
+            if self.arr2.lhs.isdigit():
+                if self.arr1.lhs.isdigit():
+                    ltype = "array<%s,%s >"%(self.arr2.lhs, ltype)
+                    # ltype = ltype
+            else:
+                ltype = "vector<%s >"%ltype
+    result = ltype + " " + scope + "Get" + self.cname[0:1].upper() + self.cname[1:] + "() const" + suffix
+    return result
+
+def member_setter_declare(self, scope="", suffix=""):
+    """Setter member function declaration."""
+    ltype = self.ctype
+    if self.ctemplate:
+        if ltype != "*":
+            ltype += "<%s >"%self.ctemplate
+        else:
+            ltype = "%s *"%self.ctemplate
+    if self.arr1.lhs:
+        if self.arr1.lhs.isdigit():
+            # ltype = "const %s&"%ltype
+            if self.arr2.lhs and self.arr2.lhs.isdigit():
+                ltype = "const array< %s, array<%s,%s > >&"%(self.arr1.lhs, self.arr2.lhs, ltype)
+            else:
+                ltype = "const array<%s,%s >& "%(self.arr1.lhs, ltype)
+        else:
+            if self.arr2.lhs and self.arr2.lhs.isdigit():
+                ltype = "const vector< array<%s,%s > >&"%(self.arr2.lhs, ltype)
+            else:
+                ltype = "const vector<%s >&"%ltype
+    else:
+        if not self.type in basic_names:
+            ltype = "const %s &"%ltype
+
+    result = "void " + scope + "Set" + self.cname[0:1].upper() + self.cname[1:] + "( " + ltype + " value )" + suffix
+    return result
+
+Member.code_construct = member_code_construct
+Member.code_declare = member_code_declare
+Member.getter_declare = member_getter_declare
+Member.setter_declare = member_setter_declare
+
+#
+# Compound Patching
+#
+
+def compound_code_construct(self):
+    # constructor
+    result = ''
+    first = True
+    for mem in self.members:
+        y_code_construct = mem.code_construct()
+        if y_code_construct:
+            if not first:
+                result += ', ' + y_code_construct
+            else:
+                result += ' : ' + y_code_construct
+                first = False
+    return result
+
+def compound_code_include_h(self):
+    if self.nativetype:
+        return ""
+
+    result = ""
+
+    # include all required structures
+    used_structs = []
+    for mem in self.members:
+        file_name = None
+        if mem.type != self.name:
+            if mem.type in compound_names:
+                if not compound_types[mem.type].nativetype:
+                    file_name = "%s%s.h"%(self.gen_file_prefix, mem.ctype)
+            elif mem.type in basic_names:
+                if basic_types[mem.type].nativetype == "Ref":
+                    file_name = "%sRef.h"%(self.root_file_prefix)
+        if file_name and file_name not in used_structs:
+            used_structs.append( file_name )
+    if used_structs:
+        result += "\n// Include structures\n"
+    for file_name in used_structs:
+        result += '#include "%s"\n'%file_name
+    return result
+
+def compound_code_fwd_decl(self):
+    if self.nativetype:
+        return ""
+    result = ""
+
+    # forward declaration of blocks
+    used_blocks = []
+    for mem in self.members:
+        if mem.template in block_names and mem.template != self.name:
+            if not mem.ctemplate in used_blocks:
+                used_blocks.append( mem.ctemplate )
+    if used_blocks:
+        result += '\n// Forward define of referenced NIF objects\n'
+    for fwd_class in used_blocks:
+        result += 'class %s;\n'%fwd_class
+    return result
+
+def compound_code_include_cpp_set(self, usedirs=False, gen_dir=None, obj_dir=None):
+    if self.nativetype:
+        return ""
+
+    if not usedirs:
+        gen_dir = self.gen_file_prefix
+        obj_dir = self.obj_file_prefix
+
+    result = []
+
+    if self.name in compound_names:
+        result.append('#include "%s%s.h"\n'%(gen_dir, self.cname))
+    elif self.name in block_names:
+        result.append('#include "%s%s.h"\n'%(obj_dir, self.cname))
+    else: assert False # bug
+
+    # include referenced blocks
+    used_blocks = []
+    for mem in self.members:
+        if mem.template in block_names and mem.template != self.name:
+            file_name = '#include "%s%s.h"\n'%(obj_dir, mem.ctemplate)
+            if file_name not in used_blocks:
+                used_blocks.append( file_name )
+        if mem.type in compound_names:
+            subblock = compound_types[mem.type]
+            used_blocks.extend(subblock.code_include_cpp_set(True, gen_dir, obj_dir))
+        for terminal in mem.cond.get_terminals():
+            if terminal in block_types:
+                used_blocks.append('#include "%s%s.h"\n'%(obj_dir, terminal))
+    for file_name in sorted(set(used_blocks)):
+        result.append(file_name)
+
+    return result
+
+def compound_code_include_cpp(self, usedirs=False, gen_dir=None, obj_dir=None):
+    return ''.join(self.code_include_cpp_set(True, gen_dir, obj_dir))
+
+
+Compound.root_file_prefix = ROOT_FILE_PREFIX
+Compound.gen_file_prefix = CMP_GEN_FILE_PREFIX
+Compound.obj_file_prefix = CMP_OBJ_FILE_PREFIX
+Compound.code_construct = compound_code_construct
+Compound.code_include_h = compound_code_include_h
+Compound.code_fwd_decl = compound_code_fwd_decl
+Compound.code_include_cpp_set = compound_code_include_cpp_set
+Compound.code_include_cpp = compound_code_include_cpp
+
+#
+# Block Patching
+#
+
+def block_code_include_h(self):
+    result = ""
+    if self.inherit:
+        result += '#include "%s.h"\n'%self.inherit.cname
+    else:
+        result += """#include "../RefObject.h"
+#include "../Type.h"
+#include "../Ref.h"
+#include "../nif_basic_types.h"
+#include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include <list>
+#include <map>
+#include <vector>"""
+    result += Compound.code_include_h(self)
+    return result
+
+Block.gen_file_prefix = BLK_GEN_FILE_PREFIX
+Block.obj_file_prefix = BLK_OBJ_FILE_PREFIX
+Block.code_include_h = block_code_include_h
+
+#
+# Parse XML after patching classes
+#
+
+parse_XML(NATIVETYPES)
+
+assert version_types
+assert version_names
+assert basic_types
+assert basic_names
+assert compound_types
+assert compound_names
+assert block_types
+assert block_names
+assert enum_types
+assert enum_names
+assert flag_types
+assert flag_names
 
 #
 # global data
