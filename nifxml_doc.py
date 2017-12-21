@@ -536,7 +536,7 @@ def ListObjectTree( root ):
         desc = ""
 
     #add a new list for this ancestor
-    object_tree +=  "<li><a href=\"" + root.name + ".html\"><b>" + root.name + "</b></a> | " + desc + "</li>\n"
+    object_tree +=  "<li><a href=\"" + root.cname + ".html\"><b>" + root.name + "</b></a> | " + desc + "</li>\n"
     """
     <ul>
     <li>
