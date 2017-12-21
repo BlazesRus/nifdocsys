@@ -229,7 +229,7 @@ for n in basic_names:
     temp.set_var( "title", x.name )
     temp.set_var( "name", x.name )
     temp.set_var( "description", x.description.replace("\n", "<br/>") )
-    if count == "1":
+    if x.count == "1":
         temp.set_var( "count", "<p>Yes</p>" )
     else:
         temp.set_var( "count", "<p>No</p>" )
