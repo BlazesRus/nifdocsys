@@ -75,7 +75,6 @@ from __future__ import unicode_literals
 from xml.dom.minidom import Node, parse
 
 import os
-import io
 import re
 import types
 
@@ -83,55 +82,24 @@ import types
 # global data
 #
 
-native_types = {}
-native_types['TEMPLATE'] = 'T'
-basic_types = {}
-enum_types = {}
-flag_types = {}
-compound_types = {}
-block_types = {}
-version_types = {}
+TYPES_NATIVE = {}
+TYPES_NATIVE['TEMPLATE'] = 'T'
+TYPES_BASIC = {}
+TYPES_ENUM = {}
+TYPES_FLAG = {}
+TYPES_COMPOUND = {}
+TYPES_BLOCK = {}
+TYPES_VERSION = {}
 
-basic_names = []
-compound_names = []
-enum_names = []
-flag_names = []
-block_names = []
-version_names = []
+NAMES_BASIC = []
+NAMES_COMPOUND = []
+NAMES_ENUM = []
+NAMES_FLAG = []
+NAMES_BLOCK = []
+NAMES_VERSION = []
 
 NATIVETYPES = {}
 
-#
-# HTML Template class
-#
-
-class Template:
-    """
-    This class processes template files.  These files have tags enclosed
-    in curly brackets like this: {tag}, which are replaced when a template
-    is processed.
-    """
-    def __init__(self):
-        """Initialize variable dictionary"""
-        self.vars = {}
-
-    def set_var(self, var_name, value):
-        """Set data in variable dictionary"""
-        self.vars[var_name] = value
-
-    def parse(self, file_name):
-        """Open file and read contents to txt variable"""
-        f = io.open(file_name, 'rt', 1, 'utf-8')
-        txt = f.read()
-        f.close()
-
-        #Loop through all variables, replacing them in the template text
-        for i in self.vars:
-            if self.vars[i] is not None:
-                txt = txt.replace('{' + i + '}', self.vars[i].encode('utf-8').decode('utf-8', 'strict'))
-
-        #return result
-        return txt
 
 def class_name(name_in):
     """
@@ -144,14 +112,14 @@ def class_name(name_in):
     if name_in is None:
         return None
     try:
-        return native_types[name_in]
+        return TYPES_NATIVE[name_in]
     except KeyError:
         return name_in.replace(' ', '_').replace(":", "_")
 
     if name_in is None:
         return None
     try:
-        return native_types[name_in]
+        return TYPES_NATIVE[name_in]
     except KeyError:
         pass
     if name_in == 'TEMPLATE':
@@ -552,7 +520,7 @@ class Expression(object):
                 return ''
             if isinstance(self.lhs, int):
                 return self.lhs
-            elif self.lhs in block_types:
+            elif self.lhs in TYPES_BLOCK:
                 return 'IsDerivedType(%s::TYPE)' % self.lhs
             else:
                 return prefix + (name_filter(self.lhs) if name_filter else self.lhs)
@@ -560,7 +528,7 @@ class Expression(object):
             lhs = self.lhs
             if isinstance(lhs, Expression):
                 lhs = lhs.code(prefix, True, name_filter)
-            elif lhs in block_types:
+            elif lhs in TYPES_BLOCK:
                 lhs = 'IsDerivedType(%s::TYPE)' % lhs
             elif lhs and not lhs.isdigit() and not lhs.startswith('0x'):
                 lhs = prefix + (name_filter(lhs) if name_filter else lhs)
@@ -570,13 +538,13 @@ class Expression(object):
             rhs = self.rhs
             if isinstance(lhs, Expression):
                 lhs = lhs.code(prefix, True, name_filter)
-            elif lhs in block_types:
+            elif lhs in TYPES_BLOCK:
                 lhs = 'IsDerivedType(%s::TYPE)' % lhs
             elif lhs and not lhs.isdigit() and not lhs.startswith('0x'):
                 lhs = prefix + (name_filter(lhs) if name_filter else lhs)
             if isinstance(rhs, Expression):
                 rhs = rhs.code(prefix, True, name_filter)
-            elif rhs in block_types:
+            elif rhs in TYPES_BLOCK:
                 rhs = 'IsDerivedType(%s::TYPE)' % rhs
             elif rhs and not rhs.isdigit() and not rhs.startswith('0x'):
                 rhs = prefix + (name_filter(rhs) if name_filter else rhs)
@@ -797,9 +765,9 @@ class Member:
                 pass
             elif self.type == "StringOffset":
                 self.default = "-1"
-            elif self.type in basic_names:
+            elif self.type in NAMES_BASIC:
                 self.default = "0"
-            elif self.type in flag_names or self.type in enum_names:
+            elif self.type in NAMES_FLAG or self.type in NAMES_ENUM:
                 self.default = "0"
         if self.default:
             if self.default[0] == '(' and self.default[-1] == ')':
@@ -822,7 +790,7 @@ class Member:
 
         # calculate other stuff
         self.uses_argument = (self.cond.lhs == '(ARG)' or self.arr1.lhs == '(ARG)' or self.arr2.lhs == '(ARG)')
-        self.type_is_native = self.name in native_types # true if the type is implemented natively
+        self.type_is_native = self.name in TYPES_NATIVE # true if the type is implemented natively
 
         # calculate stuff from reference to previous members
         # true if this is a duplicate of a previously declared member
@@ -872,6 +840,7 @@ class Version:
     """This class represents the nif.xml <version> tag."""
     def __init__(self, element):
         self.num = element.getAttribute('num')
+        self.name = self.num # Treat the version as a name to match other tags
         self.description = element.firstChild.nodeValue.strip()
 
 class Basic:
@@ -900,7 +869,7 @@ class Basic:
         if ntypes:
             self.nativetype = ntypes.get(self.name)
             if self.nativetype:
-                native_types[self.name] = self.nativetype
+                TYPES_NATIVE[self.name] = self.nativetype
                 if self.nativetype == "Ref":
                     self.is_link = True
                     self.has_links = True
@@ -916,11 +885,11 @@ class Enum(Basic):
         self.storage = element.getAttribute('storage')
         self.prefix = element.getAttribute('prefix')
         # Find the native storage type
-        self.storage = basic_types[self.storage].nativetype if basic_types[self.storage].nativetype else basic_types[self.storage].name
+        self.storage = TYPES_BASIC[self.storage].nativetype if TYPES_BASIC[self.storage].nativetype else TYPES_BASIC[self.storage].name
         self.description = element.firstChild.nodeValue.strip()
 
         self.nativetype = self.cname
-        native_types[self.name] = self.nativetype
+        TYPES_NATIVE[self.name] = self.nativetype
 
         # Locate all special enumeration options
         for option in element.getElementsByTagName('option'):
@@ -973,10 +942,10 @@ class Compound(Basic):
             # detect links & crossrefs
             mem = None
             try:
-                mem = basic_types[x.type]
+                mem = TYPES_BASIC[x.type]
             except KeyError:
                 try:
-                    mem = compound_types[x.type]
+                    mem = TYPES_COMPOUND[x.type]
                 except KeyError:
                     pass
             if mem:
@@ -1016,7 +985,7 @@ class Compound(Basic):
     def has_arr(self):
         """Tests recursively for members with an array size."""
         for mem in self.members:
-            if mem.arr1.lhs or (mem.type in compound_types and compound_types[mem.type].has_arr()):
+            if mem.arr1.lhs or (mem.type in TYPES_COMPOUND and TYPES_COMPOUND[mem.type].has_arr()):
                 return True
         return False
 
@@ -1026,27 +995,33 @@ class Block(Compound):
         Compound.__init__(self, element, ntypes)
         self.is_ancestor = (element.getAttribute('abstract') == "1")
         inherit = element.getAttribute('inherit')
-        if inherit:
-            self.inherit = block_types[inherit]
-        else:
-            self.inherit = None
+        self.inherit = TYPES_BLOCK[inherit] if inherit else None
         self.has_interface = (element.getElementsByTagName('interface') != [])
 
-    # find member by name
     def find_member(self, name, inherit=False):
+        """Find member by name"""
         ret = Compound.find_member(self, name)
         if not ret and inherit and self.inherit:
             ret = self.inherit.find_member(name, inherit)
         return ret
 
-    # find first reference of name in class
     def find_first_ref(self, name):
+        """Find first reference of name in class"""
         ret = None
         if self.inherit:
             ret = self.inherit.find_first_ref(name)
         if not ret:
             ret = Compound.find_first_ref(self, name)
         return ret
+
+    def ancestors(self):
+        """List all ancestors of this block"""
+        ancestors = []
+        parent = self
+        while parent:
+            ancestors.append(parent)
+            parent = parent.inherit
+        return ancestors
 
 #
 # import elements into our code generating classes
@@ -1065,37 +1040,68 @@ else:
     raise ImportError("nif.xml not found")
 
 def parse_XML(ntypes=None):
-    for el in XML.getElementsByTagName('version'):
-        x = Version(el)
-        version_types[x.num] = x
-        version_names.append(x.num)
+    for element in XML.getElementsByTagName('version'):
+        instance = Version(element)
+        TYPES_VERSION[instance.num] = instance
+        NAMES_VERSION.append(instance.num)
 
-    for el in XML.getElementsByTagName('basic'):
-        x = Basic(el, ntypes)
-        assert not x.name in basic_types
-        basic_types[x.name] = x
-        basic_names.append(x.name)
+    for element in XML.getElementsByTagName('basic'):
+        instance = Basic(element, ntypes)
+        assert not instance.name in TYPES_BASIC
+        TYPES_BASIC[instance.name] = instance
+        NAMES_BASIC.append(instance.name)
 
-    for el in XML.getElementsByTagName('enum'):
-        x = Enum(el, ntypes)
-        assert not x.name in enum_types
-        enum_types[x.name] = x
-        enum_names.append(x.name)
+    for element in XML.getElementsByTagName('enum'):
+        instance = Enum(element, ntypes)
+        assert not instance.name in TYPES_ENUM
+        TYPES_ENUM[instance.name] = instance
+        NAMES_ENUM.append(instance.name)
 
-    for el in XML.getElementsByTagName('bitflags'):
-        x = Flag(el, ntypes)
-        assert not x.name in flag_types
-        flag_types[x.name] = x
-        flag_names.append(x.name)
+    for element in XML.getElementsByTagName('bitflags'):
+        instance = Flag(element, ntypes)
+        assert not instance.name in TYPES_FLAG
+        TYPES_FLAG[instance.name] = instance
+        NAMES_FLAG.append(instance.name)
 
-    for el in XML.getElementsByTagName("compound"):
-        x = Compound(el, ntypes)
-        assert not x.name in compound_types
-        compound_types[x.name] = x
-        compound_names.append(x.name)
+    for element in XML.getElementsByTagName('compound'):
+        instance = Compound(element, ntypes)
+        assert not instance.name in TYPES_COMPOUND
+        TYPES_COMPOUND[instance.name] = instance
+        NAMES_COMPOUND.append(instance.name)
 
-    for el in XML.getElementsByTagName("niobject"):
-        x = Block(el, ntypes)
-        assert not x.name in block_types
-        block_types[x.name] = x
-        block_names.append(x.name)
+    for element in XML.getElementsByTagName('niobject'):
+        instance = Block(element, ntypes)
+        assert not instance.name in TYPES_BLOCK
+        TYPES_BLOCK[instance.name] = instance
+        NAMES_BLOCK.append(instance.name)
+
+    validate_XML()
+
+def validate_XML():
+    """Perform some basic validation on the data retrieved from the XML"""
+    assert TYPES_VERSION
+    assert NAMES_VERSION
+    assert TYPES_BASIC
+    assert NAMES_BASIC
+    assert TYPES_COMPOUND
+    assert NAMES_COMPOUND
+    assert TYPES_BLOCK
+    assert NAMES_BLOCK
+    assert TYPES_ENUM
+    assert NAMES_ENUM
+    assert TYPES_FLAG
+    assert NAMES_FLAG
+
+    assert len(TYPES_VERSION) == len(NAMES_VERSION)
+    assert len(TYPES_BASIC) == len(NAMES_BASIC)
+    assert len(TYPES_COMPOUND) == len(NAMES_COMPOUND)
+    assert len(TYPES_BLOCK) == len(NAMES_BLOCK)
+    assert len(TYPES_ENUM) == len(NAMES_ENUM)
+    assert len(TYPES_FLAG) == len(NAMES_FLAG)
+
+    assert all(name for name in NAMES_VERSION)
+    assert all(name for name in NAMES_BASIC)
+    assert all(name for name in NAMES_COMPOUND)
+    assert all(name for name in NAMES_BLOCK)
+    assert all(name for name in NAMES_ENUM)
+    assert all(name for name in NAMES_FLAG)

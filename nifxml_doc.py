@@ -1,583 +1,292 @@
 #!/usr/bin/python
+"""
+nifxml_doc.py
 
-# nifxml_doc.py
-#
-# This script generates HTML documentation from the XML file.
-#
-# --------------------------------------------------------------------------
-# Command line options
-#
-# -p /path/to/doc : specifies the path where HTML documentation must be created
-#
-# --------------------------------------------------------------------------
-# ***** BEGIN LICENSE BLOCK *****
-#
-# Copyright (c) 2005, 2006, 2007 NIF File Format Library and Tools
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#
-#    * Redistributions in binary form must reproduce the above
-#      copyright notice, this list of conditions and the following
-#      disclaimer in the documentation and/or other materials provided
-#      with the distribution.
-#
-#    * Neither the name of the NIF File Format Library and Tools
-#      project nor the names of its contributors may be used to endorse
-#      or promote products derived from this software without specific
-#      prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-# COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-#
-# ***** END LICENCE BLOCK *****
-# --------------------------------------------------------------------------
+Generates HTML documentation for the XML file.
+
+To list command line options run:
+    nifxml_doc.py -h
+
+ This file is part of nifxml <https://www.github.com/niftools/nifxml>
+ Copyright (c) 2017 NifTools
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, version 3.
+
+ This program is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <http://www.gnu.org/licenses/>.
+"""
 
 from __future__ import unicode_literals
 
-from distutils.dir_util import mkpath
-import sys
+import re
 import os
 import io
-import itertools
+import argparse
+from shutil import copy2
 
-from nifxml import Template
-from nifxml import block_types, basic_types, compound_types, enum_types, flag_types, version_types
-from nifxml import block_names, basic_names, compound_names, enum_names, flag_names, version_names
-from nifxml import parse_XML
+from nifxml import Compound, Block, Enum, parse_XML, version2number
+from nifxml import TYPES_BLOCK, TYPES_BASIC, TYPES_COMPOUND, TYPES_ENUM, TYPES_FLAG, TYPES_VERSION
+from nifxml import NAMES_BLOCK, NAMES_BASIC, NAMES_COMPOUND, NAMES_ENUM, NAMES_FLAG, NAMES_VERSION
 
-#
-# Parse the XML
-#
-
-parse_XML()
-
-assert version_types
-assert version_names
-assert basic_types
-assert basic_names
-assert compound_types
-assert compound_names
-assert block_types
-assert block_names
-assert enum_types
-assert enum_names
-assert flag_types
-assert flag_names
+import nifxml_tmpl as tmpl
 
 #
-# global data
+# Globals
 #
 
-ROOT_DIR = "."
+SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
+DOC_PATH = '/doc/'
+DOC_FILE = '{}.html'
+CSS_PATH = os.path.join(SCRIPT_PATH, 'doc/docsys.css')
+ICO_PATH = os.path.join(SCRIPT_PATH, 'doc/favicon.ico')
+
+def clean(string):
+    """Removes everything but letters from a string"""
+    pattern = re.compile(r'[\W_]+')
+    return pattern.sub('', string)
+
+def main():
+    """Parses the XML and generates all doc pages"""
+    # Parse the XML and sort names
+    parse_XML()
+    NAMES_BASIC.sort()
+    NAMES_COMPOUND.sort()
+    NAMES_BLOCK.sort()
+    NAMES_ENUM.sort()
+    NAMES_FLAG.sort()
+
+    # Default to calling directory
+    root_dir = '.'
+    heading = True
+    metadata = True
+    minver = ''
+
+    # Command line args
+    parser = argparse.ArgumentParser(description="NIF Format XML Docs Generation")
+    parser.add_argument('-p', '--path', help="The path where the doc folder will be generated.")
+    parser.add_argument('-no-h1', '--no-heading', action='store_true',
+                        help="Whether to not generate the main <h1> heading. Used by NifSkope for built-in help.")
+    parser.add_argument('-no-meta', '--no-metadata-columns', action='store_true',
+                        help="Whether to not generate the metadata attribute columns (arg, arr1, arr2, etc.)")
+    parser.add_argument('-min-ver', '--minimum-version',
+                        help="Hides attributes below this version. Format 'XX.X.X.XX'")
+    args = parser.parse_args()
+    if args.path:
+        root_dir = args.path
+    if args.no_heading:
+        heading = False
+    if args.no_metadata_columns:
+        metadata = False
+    if args.minimum_version:
+        minver = args.minimum_version
+
+    # Create the document generator
+    doc = DocGenerator(root_dir + DOC_PATH, heading, metadata, version2number(minver))
+    # Generate NiObject Pages
+    doc.gen_pages(NAMES_BLOCK, TYPES_BLOCK, tmpl.NIOBJECT if metadata else tmpl.NIOBJECT_NO_META)
+    # Generate Compound Pages
+    doc.gen_pages(NAMES_COMPOUND, TYPES_COMPOUND, tmpl.COMPOUND if metadata else tmpl.COMPOUND_NO_META)
+    # Generate Basic Pages
+    doc.gen_pages(NAMES_BASIC, TYPES_BASIC, tmpl.BASIC)
+    # Generate Enum Pages
+    enums = dict(TYPES_ENUM, **TYPES_FLAG)
+    doc.gen_pages(sorted(enums), enums, tmpl.ENUM)
+
+    # Generate Basic List Page
+    doc.gen_list_page('Basic Data Types', NAMES_BASIC, TYPES_BASIC, 'basic_list')
+    # Generate NiObject List Page
+    doc.gen_list_page('NIF Object List', NAMES_BLOCK, TYPES_BLOCK, 'niobject_list')
+    # Generate Compound List Page
+    doc.gen_list_page('Compound Data Types', NAMES_COMPOUND, TYPES_COMPOUND, 'compound_list')
+    # Generate Enum List Page
+    doc.gen_list_page('Enum Data Types', sorted(enums), enums, 'enum_list')
+    # Generate Version List Page
+    doc.gen_list_page('NIF File Format Versions', NAMES_VERSION, TYPES_VERSION, 'version_list', tmpl.VERSION_ROW, 'Versions')
+    # Generate Index Page
+    doc.gen_index()
 
 
-prev = ""
-for i in sys.argv:
-    if prev == "-p":
-        ROOT_DIR = i
-    prev = i
+class DocGenerator():
+    """Methods for formatting and outputting the template strings with data from the XML"""
 
-#
-# Sort Name Lists
-#
+    def __init__(self, path, heading=True, metadata=True, minver=0):
+        """Initialize generator"""
+        self.doc_file = path + DOC_FILE
+        self.main = tmpl.MAIN_H1 if heading else tmpl.MAIN_NO_H1
+        self.attr_row = tmpl.ATTR if metadata else tmpl.ATTR_NO_META
+        self.inherit = tmpl.INHERIT_ROW if metadata else tmpl.INHERIT_NO_META
+        self.minver = minver
+        self.blocks = dict(TYPES_BLOCK, **TYPES_COMPOUND)
+        install_dir = os.path.abspath(path)
+        if not os.path.exists(install_dir):
+            os.makedirs(install_dir)
+        # Install CSS and ICO
+        if os.path.dirname(CSS_PATH) != install_dir:
+            copy2(CSS_PATH, install_dir)
+            copy2(ICO_PATH, install_dir)
 
-block_names.sort()
-compound_names.sort()
-basic_names.sort()
-enum_names.sort()
-flag_names.sort()
+    #
+    # Template Helper functions
+    #
 
-def tohex(value, nbytes=4):
-    """Improved version of hex."""
-    return ("0x%%0%dX" % (2*nbytes)) % (int(str(value)) & (2**(nbytes*8)-1))
+    def list_attributes(self, compound):
+        """Create Attribute List"""
+        attrs = ''
+        count = 0
+        for mem in compound.members:
+            if self.minver and mem.ver2 and mem.ver2 < self.minver:
+                continue
+            attr_type = tmpl.TYPE_LINK.format(clean(mem.type), mem.type)
+            if mem.template:
+                attr_type += tmpl.TMPL_LINK.format(clean(mem.template), mem.template)
+            content = {
+                'attr_name': mem.name,
+                'attr_type': attr_type,
+                'attr_arg': mem.arg,
+                'attr_arr1': mem.arr1.lhs,
+                'attr_arr2': mem.arr2.lhs,
+                'attr_cond': mem.cond,
+                'attr_desc': mem.description.replace('\n', '<br/>'),
+                'attr_from': mem.orig_ver1,
+                'attr_to': mem.orig_ver2,
+                'row': 'even' if count % 2 == 0 else 'odd'
+            }
+            count += 1 # Manually increment because of 'continue' on skipped versioned rows
+            attrs += self.attr_row.format(**content)
+        return attrs
 
-def ListAttributes( compound ):
-    attr_list = ""
-    count  = 0
+    @staticmethod
+    def list_tags(names, types, template):
+        """List each tag with a description"""
+        tag_list = ''
+        for count, tname in enumerate(names):
+            tag = types[tname]
+            content = {
+                'list_name': tag.name,
+                'list_cname': clean(tag.name),
+                'list_desc': tag.description.replace('\n', '<br/>'),
+                'row': 'even' if count % 2 == 0 else 'odd'
+            }
+            tag_list += template.format(**content)
+        return tag_list
 
-    #Create Attribute List
-    for a in compound.members:
-        temp.set_var( "attr-name", a.name )
-        attr_type = '<a href="%s.html"><b>%s<b></a>'%(a.type, a.type)
-        if a.template:
-            attr_type += '&lt;<a href="%s.html">%s</a>&gt;'%(a.template.replace("\\", "_"), a.template)
-        
-        temp.set_var( "attr-type", attr_type )
-        temp.set_var( "attr-arg", a.arg )
-        temp.set_var( "attr-arr1", a.arr1.lhs )
-        temp.set_var( "attr-arr2", a.arr2.lhs )
-        cond_string = a.cond.code("", brackets = False)
-        if cond_string:
-            temp.set_var( "attr-cond", cond_string )
+    @staticmethod
+    def list_choices(tag):
+        """Create Choice List"""
+        choice_list = ''
+        for count, opt in enumerate(tag.options):
+            content = {
+                # Display bitflags as hex
+                'enum_number': opt.value if not hasattr(opt, 'bit') else '{0:#0{1}x}'.format(int(opt.value), 10),
+                'enum_name': opt.name,
+                'enum_desc': opt.description.replace('\n', '<br/>'),
+                'row': 'even' if count % 2 == 0 else 'odd'
+            }
+            choice_list += tmpl.ENUM_ROW.format(**content)
+        return choice_list
+
+    @staticmethod
+    def list_child_blocks(block):
+        """Create Child Block list"""
+        return ''.join(tmpl.LI_LINK.format(clean(n), n) for n in NAMES_BLOCK if TYPES_BLOCK[n].inherit == block)
+
+    def member_of(self, name):
+        """Create Member Of list"""
+        found = ''
+        for b_name in NAMES_BLOCK + NAMES_COMPOUND:
+            for bmem in self.blocks[b_name].members:
+                if bmem.type == name:
+                    found += tmpl.LI_LINK.format(clean(b_name), b_name)
+                    break
+        return found
+
+    def list_ancestor_attributes(self, block):
+        """Create list of attributes for all ancestors"""
+        attr_list = ''
+        for ancestor in reversed(block.ancestors()):
+            content = {'inherit': ancestor.name, 'cinherit': clean(ancestor.name)}
+            attr_list += self.inherit.format(**content) + self.list_attributes(ancestor)
+        return attr_list
+
+    def list_object_tree(self, root):
+        """Builds a hierarchical unordered list for a specified ancestor root."""
+        tree = ''
+        # Get truncated description
+        lines = root.description.splitlines(False)
+        # Add a new list for this ancestor
+        tree += tmpl.LI_LINK_DESC.format(clean(root.name), root.name, '' if not lines else lines[0])
+        # Create Child List
+        children = [TYPES_BLOCK[n] for n in NAMES_BLOCK if TYPES_BLOCK[n].inherit == root]
+        if children:
+            tree += tmpl.UL_ITEM.format(''.join(self.list_object_tree(c) for c in children))
+        return tree
+
+    #
+    # Generation Functions
+    #
+
+    def gen_pages(self, names, types, template):
+        """Generate Pages for XML Tag"""
+        for count, name in enumerate(names):
+            tag = types[name]
+            contents = {
+                'name': tag.name,
+                'description': tag.description.replace('\n', '<br/>'),
+                'storage': '' if not isinstance(tag, Enum) else tag.storage,
+                'count': bool(tag.count == '1'),
+                'member_of': self.member_of(name) if not isinstance(tag, Block) else '',
+                'row': 'even' if count % 2 == 0 else 'odd'
+            }
+            if isinstance(tag, Block):
+                contents['attributes'] = self.list_ancestor_attributes(tag)
+                contents['parent_of'] = self.list_child_blocks(tag)
+            elif isinstance(tag, Compound):
+                contents['attributes'] = self.list_attributes(tag)
+            elif isinstance(tag, Enum):
+                contents['choices'] = self.list_choices(tag)
+
+            page = {'title': tag.name, 'contents': template.format(**contents)}
+
+            html = io.open(self.doc_file.format(clean(tag.name)), 'wt', 1, 'utf-8')
+            html.write( self.main.format(**page) )
+            html.close()
+
+    def gen_list_page(self, title, names, types, pagename, rowtmpl=tmpl.LIST_ROW, header='Name'):
+        """Generate List Page for XML Tag"""
+        page = {'title': title}
+        contents = {
+            'title': title,
+            'list_header': header,
+            'list': self.list_tags(names, types, rowtmpl)
+        }
+        if isinstance(types[names[0]], Block):
+            page['contents'] = tmpl.NAV_LIST.format(**contents)
         else:
-            temp.set_var( "attr-cond", "" )
-
-        if count % 2 == 0:
-            temp.set_var( "row-class", "reg0" )
-        else:
-            temp.set_var( "row-class", "reg1" )
-
-        temp.set_var( "attr-desc", a.description.replace("\n", "<br/>") )
-
-        temp.set_var( "attr-from", a.orig_ver1 )
-        temp.set_var( "attr-to", a.orig_ver2 )
-
-        attr_list += temp.parse( "templates/attr_row.html" )
-
-        count += 1
-
-    return attr_list
-
-#
-# Generate Version List Page
-#
-
-temp = Template()
-temp.set_var( "title", "NIF File Format Versions" )
-
-#List each Version with Description
-
-count = 0
-version_list = ""
-for n in version_names:
-    x = version_types[n]
-
-    if count % 2 == 0:
-        temp.set_var( "row-class", "reg0" )
-    else:
-        temp.set_var( "row-class", "reg1" )
-            
-    temp.set_var( "list-name", x.num )
-    temp.set_var( "list-desc", x.description.replace("\n", "<br/>") )
-    
-    version_list += temp.parse( "templates/version_row.html" )
-
-    count += 1
-
-
-temp.set_var( "list", version_list )
-
-temp.set_var( "contents", temp.parse( "templates/version_list.html") )
-
-f = io.open(ROOT_DIR + '/doc/version_list.html', 'wt', 1, 'utf-8')
-f.write( temp.parse( "templates/main.html" ) )
-f.close()
-        
-
-#
-# Generate Basic List Page
-#
-
-temp = Template()
-temp.set_var( "title", "Basic Data Types" )
-
-#List each Basic Type with Description
-
-count = 0
-basic_list = ""
-for n in basic_names:
-    x = basic_types[n]
-
-    if count % 2 == 0:
-        temp.set_var( "row-class", "reg0" )
-    else:
-        temp.set_var( "row-class", "reg1" )
-            
-    temp.set_var( "list-name", x.name )
-    temp.set_var( "list-desc", x.description.replace("\n", "<br/>") )
-
-    basic_list += temp.parse( "templates/list_row.html" )
-
-    count += 1
-
-
-temp.set_var( "list", basic_list )
-
-temp.set_var( "contents", temp.parse( "templates/list.html") )
-
-f = io.open(ROOT_DIR + '/doc/basic_list.html', 'wt', 1, 'utf-8')
-f.write( temp.parse( "templates/main.html" ) )
-f.close()
-    
-
-    
-#
-# Generate Basic Pages
-#
-
-count = 0
-for n in basic_names:
-    x = basic_types[n]
-
-    temp = Template()
-    temp.set_var( "title", x.name )
-    temp.set_var( "name", x.name )
-    temp.set_var( "description", x.description.replace("\n", "<br/>") )
-    if x.count == "1":
-        temp.set_var( "count", "<p>Yes</p>" )
-    else:
-        temp.set_var( "count", "<p>No</p>" )
-
-    #Create Found In list
-    found_in = ""
-
-    for b in block_names:
-        for m in block_types[b].members:
-            if m.type == n:
-                found_in += "<li><a href=\"" + b.replace("\\", "_") + ".html\">" + b + "</a></li>\n"
-                break
-
-    for b in compound_names:
-        for m in compound_types[b].members:
-            if m.type == n:
-                found_in += "<li><a href=\"" + b.replace("\\", "_") + ".html\">" + b + "</a></li>\n"
-                break
-
-    temp.set_var( "found-in", found_in );
-    
-    temp.set_var( "contents", temp.parse( "templates/basic.html") )
-
-    f = io.open(ROOT_DIR + '/doc/' + x.cname.replace('\\', '_') + '.html', 'wt', 1, 'utf-8')
-    f.write( temp.parse( "templates/main.html" ) )
-    f.close()
-
-#
-# Generate Enum List Page
-#
-
-temp = Template()
-temp.set_var( "title", "Enum Data Types" )
-
-#List each Enum Type with Description
-
-count = 0
-enum_list = ""
-for n, x in itertools.chain(enum_types.items(), flag_types.items()):
-    if count % 2 == 0:
-        temp.set_var( "row-class", "reg0" )
-    else:
-        temp.set_var( "row-class", "reg1" )
-            
-    temp.set_var( "list-name", x.name )
-    temp.set_var( "list-desc", x.description.replace("\n", "<br/>") )
-
-    enum_list += temp.parse( "templates/list_row.html" )
-
-    count += 1
-
-
-temp.set_var( "list", enum_list )
-
-temp.set_var( "contents", temp.parse( "templates/list.html") )
-
-f = io.open(ROOT_DIR + '/doc/enum_list.html', 'wt', 1, 'utf-8')
-f.write( temp.parse( "templates/main.html" ) )
-f.close()
-    
-
-    
-#
-# Generate Enum Pages
-#
-
-count = 0
-for n, x in itertools.chain(enum_types.items(), flag_types.items()):
-
-    temp = Template()
-    temp.set_var( "title", x.name )
-    temp.set_var( "name", x.name )
-    temp.set_var( "storage", x.storage )
-    temp.set_var( "description", x.description.replace("\n", "<br/>") )
-
-    #Create Found In list
-    found_in = ""
-
-    for b in block_names:
-        for m in block_types[b].members:
-            if m.type == n:
-                found_in += "<li><a href=\"" + b.replace("\\", "_") + ".html\">" + b + "</a></li>\n"
-                break
-
-    for b in compound_names:
-        for m in compound_types[b].members:
-            if m.type == n:
-                found_in += "<li><a href=\"" + b.replace("\\", "_") + ".html\">" + b + "</a></li>\n"
-                break
-
-    temp.set_var( "found-in", found_in );
-
-    #Create Choice List
-
-    count = 0
-    choice_list = ""
-    for o in x.options:
-        if count % 2 == 0:
-            temp.set_var( "row-class", "reg0" )
-        else:
-            temp.set_var( "row-class", "reg1" )
-
-        # represent bit flags with hex
-        if (hasattr(o, "bit")):
-            temp.set_var( "enum-number", tohex(o.value) )
-        else:
-            temp.set_var( "enum-number", o.value )
-        temp.set_var( "enum-name", o.name )
-        temp.set_var( "enum-desc", o.description.replace("\n", "<br/>") )
-
-        choice_list += temp.parse( "templates/enum_row.html" )
-
-        count += 1
-
-    temp.set_var( "choices", choice_list )
-    
-    temp.set_var( "contents", temp.parse( "templates/enum.html") )
-
-    f = io.open(ROOT_DIR + '/doc/' + x.cname.replace("\\", "_") + '.html', 'wt', 1, 'utf-8')
-    f.write( temp.parse( "templates/main.html" ) )
-    f.close()
-
-
-#
-# Generate Compound List Page
-#
-
-temp = Template()
-temp.set_var( "title", "Compound Data Types" )
-
-#List each Compound with Description
-
-count = 0
-compound_list = ""
-for n in compound_names:
-    x = compound_types[n]
-
-    if count % 2 == 0:
-        temp.set_var( "row-class", "reg0" )
-    else:
-        temp.set_var( "row-class", "reg1" )
-            
-    temp.set_var( "list-name", x.name )
-    temp.set_var( "list-desc", x.description.replace("\n", "<br/>") )
-
-    compound_list += temp.parse( "templates/list_row.html" )
-
-    count += 1
-
-
-temp.set_var( "list", compound_list )
-
-temp.set_var( "contents", temp.parse( "templates/list.html") )
-
-f = io.open(ROOT_DIR + '/doc/compound_list.html', 'wt', 1, 'utf-8')
-f.write( temp.parse( "templates/main.html" ) )
-f.close()
-    
-
-    
-#
-# Generate Compound Pages
-#
-
-count = 0
-for n in compound_names:
-    x = compound_types[n]
-
-    temp = Template()
-    temp.set_var( "title", x.name )
-    temp.set_var( "name", x.name )
-    temp.set_var( "description", x.description.replace("\n", "<br/>") )
-
-    #Create Found In list
-    found_in = ""
-
-    for b in block_names:
-        for m in block_types[b].members:
-            if m.type == n:
-                found_in += "<li><a href=\"" + b.replace("\\", "_") + ".html\">" + b + "</a></li>\n"
-                break
-
-    for b in compound_names:
-        for m in compound_types[b].members:
-            if m.type == n:
-                found_in += "<li><a href=\"" + b.replace("\\", "_") + ".html\">" + b + "</a></li>\n"
-                break
-
-    temp.set_var( "found-in", found_in );
-
-    #Create Attribute List
-    attr_list = ListAttributes( x)
-
-    temp.set_var( "attributes", attr_list )
-    
-    temp.set_var( "contents", temp.parse( "templates/compound.html") )
-
-    f = io.open(ROOT_DIR + '/doc/' + x.cname.replace("\\", "_") + '.html', 'wt', 1, 'utf-8')
-    f.write( temp.parse( "templates/main.html" ) )
-    f.close()
-
-#
-# Generate NiObject List Page
-#
-
-temp = Template()
-temp.set_var( "title", "NIF Object List" )
-
-#List each NiObject with Description
-
-count = 0
-niobject_list = ""
-for n in block_names:
-    x = block_types[n]
-
-    if count % 2 == 0:
-        temp.set_var( "row-class", "reg0" )
-    else:
-        temp.set_var( "row-class", "reg1" )
-            
-    temp.set_var( "list-name", x.name )
-    temp.set_var( "list-desc", x.description.replace("\n", "<br/>") )
-
-    niobject_list += temp.parse( "templates/list_row.html" )
-
-    count += 1
-
-
-temp.set_var( "list", niobject_list )
-
-temp.set_var( "niobject-contents", temp.parse( "templates/list.html") )
-temp.set_var( "contents", temp.parse( "templates/niobject_nav.html") )
-
-f = io.open(ROOT_DIR + '/doc/niobject_list.html', 'wt', 1, 'utf-8')
-f.write( temp.parse( "templates/main.html" ) )
-f.close()
-    
-
-    
-#
-# Generate NiObject Pages
-#
-
-count = 0
-for n in block_names:
-    x = block_types[n]
-
-    temp = Template()
-    temp.set_var( "title", x.name )
-    temp.set_var( "name", x.name )
-    temp.set_var( "description", x.description.replace("\n", "<br/>") )
-
-    #Create Ancestor List
-
-    ancestors = []
-    b = x
-    while b:
-        ancestors.append(b)
-        b = b.inherit
-
-    ancestors.reverse()
-        
-    #Create Attribute List
-    attr_list = ""
-    count = 0
-
-    for a in ancestors:
-        temp.set_var( "inherit", a.name )
-        attr_list += temp.parse( "templates/inherit_row.html" )
-
-        inherit_list = ""
-        inherit_list = ListAttributes( a )
-
-        attr_list += inherit_list
-    
-    temp.set_var( "attributes", attr_list )
-
-    #Create Parent Of list
-    parent_of = ""
-    for b in block_names:
-        if block_types[b].inherit == x:
-            parent_of += "<li><a href=\"" + b.replace("\\", "_") + ".html\">" + b + "</a></li>\n"
-
-    temp.set_var( "parent-of", parent_of );
-    
-    temp.set_var( "contents", temp.parse( "templates/niobject.html") )
-
-    f = io.open(ROOT_DIR + '/doc/' + x.cname.replace("\\", "_") + '.html', 'wt', 1, 'utf-8')
-    f.write( temp.parse( "templates/main.html" ) )
-    f.close()
-
-#global value
-object_tree = ""
-
-def ListObjectTree( root ):
-
-    global object_tree
-
-    #get first line of description
-    lines = root.description.splitlines(False)
-    if len(lines) > 0:
-        desc = lines[0]
-    else:
-        desc = ""
-
-    #add a new list for this ancestor
-    object_tree +=  "<li><a href=\"" + root.cname + ".html\"><b>" + root.name + "</b></a> | " + desc + "</li>\n"
-    """
-    <ul>
-    <li>
-    <a href="index.php?mode=list&amp;table=attr&amp;block_id=379&amp;version="><b>NiObject</b></a>
-     | Abstract block type.<ul>
-    <li>
-    """
-
-    #Create Child List
-
-    children = []
-    for b in block_names:
-        if block_types[b].inherit == root:
-            children.append(block_types[b])
-
-    if len(children) > 0:
-        object_tree += "<ul>\n"
-        
-        for c in children:
-            ListObjectTree(c)
-
-        object_tree += "</ul>\n"
-
-#
-# Generate NiObject Hierarchy Page
-#
-
-temp = Template()
-temp.set_var( "title", "NIF Object Hierarchy" )
-
-# Build Tree
-
-object_tree = ""
-ListObjectTree( block_types["NiObject"] )
-temp.set_var( "object-tree", object_tree )
-
-
-temp.set_var( "niobject-contents", temp.parse( "templates/hierarchy.html") )
-temp.set_var( "contents", temp.parse( "templates/niobject_nav.html") )
-
-f = io.open(ROOT_DIR + '/doc/index.html', 'wt', 1, 'utf-8')
-f.write( temp.parse( "templates/main.html" ) )
-f.close()
-        
+            page['contents'] = tmpl.LIST.format(**contents)
+
+        html = io.open(self.doc_file.format(pagename), 'wt', 1, 'utf-8')
+        html.write( self.main.format(**page) )
+        html.close()
+
+    def gen_index(self):
+        """Generate index.html"""
+        page = {'title': 'NIF Object Hierarchy'}
+        contents = {
+            'title': page['title'],
+            'object_tree': self.list_object_tree( TYPES_BLOCK['NiObject'] )
+        }
+        page['contents'] = tmpl.NAV_HIER.format(**contents)
+
+        html = io.open(self.doc_file.format('index'), 'wt', 1, 'utf-8')
+        html.write( self.main.format(**page) )
+        html.close()
+
+if __name__ == "__main__":
+    main()
