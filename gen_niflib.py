@@ -84,9 +84,9 @@ import os
 import io
 import itertools
 
-from nifxml import Member, Compound, Block, native_types, NATIVETYPES
-from nifxml import block_types, basic_types, compound_types, enum_types, flag_types, version_types
-from nifxml import block_names, basic_names, compound_names, enum_names, flag_names, version_names
+from nifxml import Member, Compound, Block
+from nifxml import TYPES_BLOCK, TYPES_BASIC, TYPES_COMPOUND, TYPES_ENUM, TYPES_FLAG, TYPES_NATIVE
+from nifxml import NAMES_BLOCK, NAMES_BASIC, NAMES_COMPOUND
 from nifxml import scanBrackets, define_name, parse_XML
 
 
@@ -248,7 +248,7 @@ def member_setter_declare(self, scope="", suffix=""):
             else:
                 ltype = "const vector<%s >&"%ltype
     else:
-        if not self.type in basic_names:
+        if not self.type in NAMES_BASIC:
             ltype = "const %s &"%ltype
 
     result = "void " + scope + "Set" + self.cname[0:1].upper() + self.cname[1:] + "( " + ltype + " value )" + suffix
@@ -288,11 +288,11 @@ def compound_code_include_h(self):
     for mem in self.members:
         file_name = None
         if mem.type != self.name:
-            if mem.type in compound_names:
-                if not compound_types[mem.type].nativetype:
+            if mem.type in NAMES_COMPOUND:
+                if not TYPES_COMPOUND[mem.type].nativetype:
                     file_name = "%s%s.h"%(self.gen_file_prefix, mem.ctype)
-            elif mem.type in basic_names:
-                if basic_types[mem.type].nativetype == "Ref":
+            elif mem.type in NAMES_BASIC:
+                if TYPES_BASIC[mem.type].nativetype == "Ref":
                     file_name = "%sRef.h"%(self.root_file_prefix)
         if file_name and file_name not in used_structs:
             used_structs.append( file_name )
@@ -310,7 +310,7 @@ def compound_code_fwd_decl(self):
     # forward declaration of blocks
     used_blocks = []
     for mem in self.members:
-        if mem.template in block_names and mem.template != self.name:
+        if mem.template in NAMES_BLOCK and mem.template != self.name:
             if not mem.ctemplate in used_blocks:
                 used_blocks.append( mem.ctemplate )
     if used_blocks:
@@ -329,24 +329,24 @@ def compound_code_include_cpp_set(self, usedirs=False, gen_dir=None, obj_dir=Non
 
     result = []
 
-    if self.name in compound_names:
+    if self.name in NAMES_COMPOUND:
         result.append('#include "%s%s.h"\n'%(gen_dir, self.cname))
-    elif self.name in block_names:
+    elif self.name in NAMES_BLOCK:
         result.append('#include "%s%s.h"\n'%(obj_dir, self.cname))
     else: assert False # bug
 
     # include referenced blocks
     used_blocks = []
     for mem in self.members:
-        if mem.template in block_names and mem.template != self.name:
+        if mem.template in NAMES_BLOCK and mem.template != self.name:
             file_name = '#include "%s%s.h"\n'%(obj_dir, mem.ctemplate)
             if file_name not in used_blocks:
                 used_blocks.append( file_name )
-        if mem.type in compound_names:
-            subblock = compound_types[mem.type]
+        if mem.type in NAMES_COMPOUND:
+            subblock = TYPES_COMPOUND[mem.type]
             used_blocks.extend(subblock.code_include_cpp_set(True, gen_dir, obj_dir))
         for terminal in mem.cond.get_terminals():
-            if terminal in block_types:
+            if terminal in TYPES_BLOCK:
                 used_blocks.append('#include "%s%s.h"\n'%(obj_dir, terminal))
     for file_name in sorted(set(used_blocks)):
         result.append(file_name)
@@ -399,19 +399,6 @@ Block.code_include_h = block_code_include_h
 #
 
 parse_XML(NATIVETYPES)
-
-assert version_types
-assert version_names
-assert basic_types
-assert basic_names
-assert compound_types
-assert compound_names
-assert block_types
-assert block_names
-assert enum_types
-assert enum_names
-assert flag_types
-assert flag_names
 
 #
 # global data
@@ -563,8 +550,8 @@ for i in sys.argv:
 
 
 # Fix known manual update attributes. For now hard code here.
-block_types["NiKeyframeData"].find_member("Num Rotation Keys").is_manual_update = True
-#block_types["NiTriStripsData"].find_member("Num Triangles").is_manual_update = True
+TYPES_BLOCK["NiKeyframeData"].find_member("Num Rotation Keys").is_manual_update = True
+#TYPES_BLOCK["NiTriStripsData"].find_member("Num Triangles").is_manual_update = True
 
 
 ACTION_READ = 0
@@ -679,7 +666,10 @@ class CFile(io.TextIOWrapper):
         @param txt: The include filepath.
         @type txt: str
         """
-        self.write( '#include {0}\n'.format(txt) )
+        if (txt.startswith('<') and txt.endswith('>')) or (txt.startswith('"') and txt.endswith('"')):
+            self.write( '#include {0}\n'.format(txt) )
+        else:
+            self.write( '#include "{0}"\n'.format(txt) )
 
     def comment(self, txt, doxygen=True):
         """
@@ -846,14 +836,14 @@ class CFile(io.TextIOWrapper):
         # now comes the difficult part: processing all members recursively
         for y in block.members:
             # get block
-            if y.type in basic_types:
-                subblock = basic_types[y.type]
-            elif y.type in compound_types:
-                subblock = compound_types[y.type]
-            elif y.type in enum_types:
-                subblock = enum_types[y.type]
-            elif y.type in flag_types:
-                subblock = flag_types[y.type]
+            if y.type in TYPES_BASIC:
+                subblock = TYPES_BASIC[y.type]
+            elif y.type in TYPES_COMPOUND:
+                subblock = TYPES_COMPOUND[y.type]
+            elif y.type in TYPES_ENUM:
+                subblock = TYPES_ENUM[y.type]
+            elif y.type in TYPES_FLAG:
+                subblock = TYPES_FLAG[y.type]
 
             # check for links
             if action in [ACTION_FIXLINKS, ACTION_GETREFS, ACTION_GETPTRS]:
@@ -1013,7 +1003,7 @@ class CFile(io.TextIOWrapper):
                             %(self.indent, self.indent, y.arr2.code(y_arr2_prefix), self.indent-1, self.indent))
                     z = "%s%s[i%i][i%i]"%(y_prefix, y.cname, self.indent-2, self.indent-1)
 
-            if y.type in native_types:
+            if y.type in TYPES_NATIVE:
                 # these actions distinguish between refs and non-refs
                 if action in [ACTION_READ, ACTION_WRITE, ACTION_FIXLINKS, ACTION_GETREFS, ACTION_GETPTRS]:
                     if (not subblock.is_link) and (not subblock.is_crossref):
@@ -1064,7 +1054,7 @@ class CFile(io.TextIOWrapper):
                         self.code('%s << "%*s%s[" << i%i << "]:  " << %s << endl;'%(stream, 2*self.indent, "", y.name, self.indent-1, z))
                         self.code('array_output_count++;')
             else:
-                subblock = compound_types[y.type]
+                subblock = TYPES_COMPOUND[y.type]
                 if not y.arr1.lhs:
                     self.stream(subblock, action, "%s%s_"%(localprefix, y.cname), "%s."%z, y_arg_prefix, y_arg)
                 elif not y.arr2.lhs:
@@ -1247,8 +1237,8 @@ mkpath(os.path.join(ROOT_DIR, "include/gen"))
 mkpath(os.path.join(ROOT_DIR, "src/obj"))
 mkpath(os.path.join(ROOT_DIR, "src/gen"))
 
-for n in compound_names:
-    x = compound_types[n]
+for n in NAMES_COMPOUND:
+    x = TYPES_COMPOUND[n]
     # skip natively implemented types
     if x.name in NATIVETYPES.keys():
         continue
@@ -1263,9 +1253,9 @@ for n in compound_names:
     HDR.code( FULLGEN_NOTICE )
     HDR.guard( x.cname.upper() )
     HDR.code()
-    HDR.include( '"../NIF_IO.h"' )
+    HDR.include( '../NIF_IO.h' )
     if n in ["Header", "Footer"]:
-        HDR.include( '"../obj/NiObject.h"' )
+        HDR.include( '../obj/NiObject.h' )
     HDR.code( x.code_include_h() )
     HDR.namespace( 'Niflib' )
     HDR.code( x.code_fwd_decl() )
@@ -1415,7 +1405,7 @@ if GENALLFILES:
     HDR.code()
     HDR.namespace( 'Niflib' )
     HDR.code()
-    for n, x in itertools.chain(enum_types.items(), flag_types.items()):
+    for n, x in itertools.chain(TYPES_ENUM.items(), TYPES_FLAG.items()):
         if x.options:
             if x.description:
                 HDR.comment(x.description)
@@ -1437,11 +1427,11 @@ if GENALLFILES:
     HDR.include( '<iostream>' )
     HDR.code( 'using namespace std;' )
     HDR.code()
-    HDR.include('"../nif_basic_types.h"')
+    HDR.include('../nif_basic_types.h')
     HDR.code()
     HDR.namespace( 'Niflib' )
     HDR.code()
-    for n, x in itertools.chain(enum_types.items(), flag_types.items()):
+    for n, x in itertools.chain(TYPES_ENUM.items(), TYPES_FLAG.items()):
         if x.options:
             if x.description:
                 HDR.code()
@@ -1459,16 +1449,16 @@ if GENALLFILES:
     CPP.code()
     CPP.include('<string>')
     CPP.include('<iostream>')
-    CPP.include('"../../include/NIF_IO.h"')
-    CPP.include('"../../include/gen/enums.h"')
-    CPP.include('"../../include/gen/enums_intl.h"')
+    CPP.include('../../include/NIF_IO.h')
+    CPP.include('../../include/gen/enums.h')
+    CPP.include('../../include/gen/enums_intl.h')
     CPP.code()
     CPP.code('using namespace std;')
     CPP.code()
     CPP.namespace( 'Niflib' )
     CPP.code()
     CPP.code()
-    for n, x in itertools.chain(enum_types.items(), flag_types.items()):
+    for n, x in itertools.chain(TYPES_ENUM.items(), TYPES_FLAG.items()):
         if x.options:
             CPP.code( ENUM_IMPL.format(x.cname, x.storage, r''.join((ENUM_IMPL_CASE.format(o.cname, o.name) for o in x.options))) )
             CPP.code()
@@ -1480,16 +1470,16 @@ if GENALLFILES:
     CPP = CFile(io.open(ROOT_DIR + '/src/gen/register.cpp', 'wb'))
     CPP.code( FULLGEN_NOTICE )
     CPP.code()
-    CPP.include( '"../../include/ObjectRegistry.h"' )
-    for n in block_names:
-        x = block_types[n]
-        CPP.include( '"../../include/obj/' + x.cname + '.h"' )
+    CPP.include( '../../include/ObjectRegistry.h' )
+    for n in NAMES_BLOCK:
+        x = TYPES_BLOCK[n]
+        CPP.include( '../../include/obj/' + x.cname + '.h' )
     CPP.code()
     CPP.namespace( 'Niflib' )
     CPP.code( 'void RegisterObjects() {' )
     CPP.code()
-    for n in block_names:
-        x = block_types[n]
+    for n in NAMES_BLOCK:
+        x = TYPES_BLOCK[n]
         CPP.code( 'ObjectRegistry::RegisterObject( "' + x.name + '", ' + x.cname + '::Create );' )
     CPP.code()
     CPP.code( '}' )
@@ -1498,8 +1488,8 @@ if GENALLFILES:
 #
 # NiObject Files
 #
-for n in block_names:
-    x = block_types[n]
+for n in NAMES_BLOCK:
+    x = TYPES_BLOCK[n]
     x_define_name = define_name(x.cname)
 
     if not GENALLFILES and not x.cname in GENBLOCKS:
@@ -1615,9 +1605,9 @@ for n in block_names:
 
     CPP.code( END_CUSTOM )
     CPP.code()
-    CPP.include( '"../../include/FixLink.h"' )
-    CPP.include( '"../../include/ObjectRegistry.h"' )
-    CPP.include( '"../../include/NIF_IO.h"' )
+    CPP.include( '../../include/FixLink.h' )
+    CPP.include( '../../include/ObjectRegistry.h' )
+    CPP.include( '../../include/NIF_IO.h' )
     CPP.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
     CPP.code( "using namespace Niflib;" )
     CPP.code()

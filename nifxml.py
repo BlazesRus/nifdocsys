@@ -98,8 +98,6 @@ NAMES_FLAG = []
 NAMES_BLOCK = []
 NAMES_VERSION = []
 
-NATIVETYPES = {}
-
 
 def class_name(name_in):
     """
