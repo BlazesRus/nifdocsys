@@ -1025,13 +1025,8 @@ class Block(Compound):
 # import elements into our code generating classes
 #
 
-# import via "import nifxml" from .
 if os.path.exists("nif.xml"):
     XML = parse("nif.xml")
-# import via "import docsys" from ..
-elif os.path.exists("docsys/nif.xml"):
-    XML = parse("docsys/nif.xml")
-# new submodule system
 elif os.path.exists("nifxml/nif.xml"):
     XML = parse("nifxml/nif.xml")
 else:

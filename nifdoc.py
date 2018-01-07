@@ -44,7 +44,7 @@ import nifdoc_tmpl as tmpl
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 DOC_PATH = '/doc/'
 DOC_FILE = '{}.html'
-CSS_PATH = os.path.join(SCRIPT_PATH, 'doc/docsys.css')
+CSS_PATH = os.path.join(SCRIPT_PATH, 'doc/nifdoc.css')
 ICO_PATH = os.path.join(SCRIPT_PATH, 'doc/favicon.ico')
 
 def clean(string):

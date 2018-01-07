@@ -27,7 +27,7 @@ MAIN_BEG = """<!doctype html>
 <html lang="en">
 <head>
 \t<title>NIF File Format Documentation - {title}</title>
-\t<link rel="stylesheet" href="docsys.css" type="text/css" />
+\t<link rel="stylesheet" href="nifdoc.css" type="text/css" />
 \t<link rel="icon" href="favicon.ico" type="image/x-icon" />
 </head>
 <body>"""
