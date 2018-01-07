@@ -7,20 +7,20 @@ Generates HTML documentation for the XML file.
 To list command line options run:
     nifdoc.py -h
 
- This file is part of nifxml <https://www.github.com/niftools/nifxml>
- Copyright (c) 2017 NifTools
+This file is part of nifxml <https://www.github.com/niftools/nifxml>
+Copyright (c) 2017 NifTools
 
- This program is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, version 3.
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3.
 
- This program is distributed in the hope that it will be useful, but
- WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- General Public License for more details.
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
 
- You should have received a copy of the GNU General Public License
- along with this program. If not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
 from __future__ import unicode_literals
@@ -31,11 +31,11 @@ import io
 import argparse
 from shutil import copy2
 
-from nifxml import Compound, Block, Enum, parse_XML, version2number
+from nifxml import Compound, Block, Enum, parse_xml, version2number
 from nifxml import TYPES_BLOCK, TYPES_BASIC, TYPES_COMPOUND, TYPES_ENUM, TYPES_FLAG, TYPES_VERSION
 from nifxml import NAMES_BLOCK, NAMES_BASIC, NAMES_COMPOUND, NAMES_ENUM, NAMES_FLAG, NAMES_VERSION
 
-import nifdoc_tmpl as tmpl
+from doc import nifdoc_tmpl as tmpl
 
 #
 # Globals
@@ -55,7 +55,7 @@ def clean(string):
 def main():
     """Parses the XML and generates all doc pages"""
     # Parse the XML and sort names
-    parse_XML()
+    parse_xml()
     NAMES_BASIC.sort()
     NAMES_COMPOUND.sort()
     NAMES_BLOCK.sort()

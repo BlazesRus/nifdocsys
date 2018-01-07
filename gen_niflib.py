@@ -87,7 +87,7 @@ import itertools
 from nifxml import Member, Compound, Block
 from nifxml import TYPES_BLOCK, TYPES_BASIC, TYPES_COMPOUND, TYPES_ENUM, TYPES_FLAG, TYPES_NATIVE
 from nifxml import NAMES_BLOCK, NAMES_BASIC, NAMES_COMPOUND
-from nifxml import scanBrackets, define_name, parse_XML
+from nifxml import scanBrackets, define_name, parse_xml
 
 
 # The relative path to the project root for compounds and NiObjects (Compound and Block)
@@ -186,12 +186,12 @@ def member_code_declare(self, prefix=""):
     if self.arr1.lhs:
         if self.arr1.lhs.isdigit():
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                result = "array< %s, array<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
+                result = "Niflib::array< %s, Niflib::array<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
             else:
-                result = "array<%s,%s >"%(self.arr1.lhs, result)
+                result = "Niflib::array<%s,%s >"%(self.arr1.lhs, result)
         else:
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                result = "vector< array<%s,%s > >"%(self.arr2.lhs, result)
+                result = "vector< Niflib::array<%s,%s > >"%(self.arr2.lhs, result)
             else:
                 if self.arr2.lhs:
                     result = "vector< vector<%s > >"%result
@@ -210,17 +210,17 @@ def member_getter_declare(self, scope="", suffix=""):
             ltype = "%s *"%self.ctemplate
     if self.arr1.lhs:
         if self.arr1.lhs.isdigit():
-            ltype = "array<%s,%s > "%(self.arr1.lhs, ltype)
+            ltype = "Niflib::array<%s,%s > "%(self.arr1.lhs, ltype)
             # ltype = ltype
         else:
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                ltype = "vector< array<%s,%s > >"%(self.arr2.lhs, ltype)
+                ltype = "vector< Niflib::array<%s,%s > >"%(self.arr2.lhs, ltype)
             else:
                 ltype = "vector<%s >"%ltype
         if self.arr2.lhs:
             if self.arr2.lhs.isdigit():
                 if self.arr1.lhs.isdigit():
-                    ltype = "array<%s,%s >"%(self.arr2.lhs, ltype)
+                    ltype = "Niflib::array<%s,%s >"%(self.arr2.lhs, ltype)
                     # ltype = ltype
             else:
                 ltype = "vector<%s >"%ltype
@@ -239,12 +239,12 @@ def member_setter_declare(self, scope="", suffix=""):
         if self.arr1.lhs.isdigit():
             # ltype = "const %s&"%ltype
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                ltype = "const array< %s, array<%s,%s > >&"%(self.arr1.lhs, self.arr2.lhs, ltype)
+                ltype = "const Niflib::array< %s, Niflib::array<%s,%s > >&"%(self.arr1.lhs, self.arr2.lhs, ltype)
             else:
-                ltype = "const array<%s,%s >& "%(self.arr1.lhs, ltype)
+                ltype = "const Niflib::array<%s,%s >& "%(self.arr1.lhs, ltype)
         else:
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                ltype = "const vector< array<%s,%s > >&"%(self.arr2.lhs, ltype)
+                ltype = "const vector< Niflib::array<%s,%s > >&"%(self.arr2.lhs, ltype)
             else:
                 ltype = "const vector<%s >&"%ltype
     else:
@@ -398,7 +398,7 @@ Block.code_include_h = block_code_include_h
 # Parse XML after patching classes
 #
 
-parse_XML(NATIVETYPES)
+parse_xml(NATIVETYPES)
 
 #
 # global data
