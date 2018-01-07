@@ -1,11 +1,11 @@
 #!/usr/bin/python
 """
-nifxml_doc.py
+nifdoc.py
 
 Generates HTML documentation for the XML file.
 
 To list command line options run:
-    nifxml_doc.py -h
+    nifdoc.py -h
 
  This file is part of nifxml <https://www.github.com/niftools/nifxml>
  Copyright (c) 2017 NifTools
@@ -35,7 +35,7 @@ from nifxml import Compound, Block, Enum, parse_XML, version2number
 from nifxml import TYPES_BLOCK, TYPES_BASIC, TYPES_COMPOUND, TYPES_ENUM, TYPES_FLAG, TYPES_VERSION
 from nifxml import NAMES_BLOCK, NAMES_BASIC, NAMES_COMPOUND, NAMES_ENUM, NAMES_FLAG, NAMES_VERSION
 
-import nifxml_tmpl as tmpl
+import nifdoc_tmpl as tmpl
 
 #
 # Globals
