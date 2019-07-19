@@ -186,12 +186,12 @@ def member_code_declare(self, prefix=""):
     if self.arr1.lhs:
         if self.arr1.lhs.isdigit():
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                result = "Niflib::array< %s, Niflib::array<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
+                result = "Niflib::NifArray< %s, Niflib::NifArray<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
             else:
-                result = "Niflib::array<%s,%s >"%(self.arr1.lhs, result)
+                result = "Niflib::NifArray<%s,%s >"%(self.arr1.lhs, result)
         else:
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                result = "vector< Niflib::array<%s,%s > >"%(self.arr2.lhs, result)
+                result = "vector< Niflib::NifArray<%s,%s > >"%(self.arr2.lhs, result)
             else:
                 if self.arr2.lhs:
                     result = "vector< vector<%s > >"%result
@@ -210,17 +210,17 @@ def member_getter_declare(self, scope="", suffix=""):
             ltype = "%s *"%self.ctemplate
     if self.arr1.lhs:
         if self.arr1.lhs.isdigit():
-            ltype = "Niflib::array<%s,%s > "%(self.arr1.lhs, ltype)
+            ltype = "Niflib::NifArray<%s,%s > "%(self.arr1.lhs, ltype)
             # ltype = ltype
         else:
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                ltype = "vector< Niflib::array<%s,%s > >"%(self.arr2.lhs, ltype)
+                ltype = "vector< Niflib::NifArray<%s,%s > >"%(self.arr2.lhs, ltype)
             else:
                 ltype = "vector<%s >"%ltype
         if self.arr2.lhs:
             if self.arr2.lhs.isdigit():
                 if self.arr1.lhs.isdigit():
-                    ltype = "Niflib::array<%s,%s >"%(self.arr2.lhs, ltype)
+                    ltype = "Niflib::NifArray<%s,%s >"%(self.arr2.lhs, ltype)
                     # ltype = ltype
             else:
                 ltype = "vector<%s >"%ltype
@@ -239,12 +239,12 @@ def member_setter_declare(self, scope="", suffix=""):
         if self.arr1.lhs.isdigit():
             # ltype = "const %s&"%ltype
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                ltype = "const Niflib::array< %s, Niflib::array<%s,%s > >&"%(self.arr1.lhs, self.arr2.lhs, ltype)
+                ltype = "const Niflib::NifArray< %s, Niflib::NifArray<%s,%s > >&"%(self.arr1.lhs, self.arr2.lhs, ltype)
             else:
-                ltype = "const Niflib::array<%s,%s >& "%(self.arr1.lhs, ltype)
+                ltype = "const Niflib::NifArray<%s,%s >& "%(self.arr1.lhs, ltype)
         else:
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                ltype = "const vector< Niflib::array<%s,%s > >&"%(self.arr2.lhs, ltype)
+                ltype = "const vector< Niflib::NifArray<%s,%s > >&"%(self.arr2.lhs, ltype)
             else:
                 ltype = "const vector<%s >&"%ltype
     else:
@@ -404,7 +404,7 @@ parse_xml(NATIVETYPES)
 # global data
 #
 
-COPYRIGHT_YEAR = 2017
+COPYRIGHT_YEAR = 2019
 
 COPYRIGHT_NOTICE = r'''/* Copyright (c) {0}, NIF File Format Library and Tools
 All rights reserved.  Please see niflib.h for license. */'''.format(COPYRIGHT_YEAR)
@@ -1250,6 +1250,7 @@ for n in NAMES_COMPOUND:
     custom_lines = extract_custom_code( file_name )
 
     HDR = CFile(io.open(file_name, 'wb'))
+    print("Generating " + file_name)
     HDR.code( FULLGEN_NOTICE )
     HDR.guard( x.cname.upper() )
     HDR.code()
@@ -1305,6 +1306,7 @@ for n in NAMES_COMPOUND:
         custom_lines = extract_custom_code( file_name )
 
         CPP = CFile(io.open(file_name, 'wb'))
+        print("Generating " + file_name)
         CPP.code( PARTGEN_NOTICE )
         CPP.code()
         CPP.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
@@ -1505,6 +1507,7 @@ for n in NAMES_BLOCK:
 
     #output new file
     HDR = CFile(io.open(file_name, 'wb'))
+    print("Generating " + file_name)
     HDR.code( PARTGEN_NOTICE )
     HDR.guard( x.cname.upper() )
     HDR.code()
@@ -1595,6 +1598,7 @@ for n in NAMES_BLOCK:
     custom_lines = extract_custom_code( file_name )
 
     CPP = CFile(io.open(file_name, 'wb'))
+    print("Generating " + file_name)
     CPP.code( PARTGEN_NOTICE )
     CPP.code()
     CPP.code( BEG_HEAD )
