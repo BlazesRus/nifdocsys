@@ -142,8 +142,8 @@ NATIVETYPES = {
     'QuatKey' : 'Key',
     'TexCoord' : 'TexCoord',
     'Triangle' : 'Triangle',
-    'BSVertexData' : 'BSVertexData',
-    'BSVertexDataSSE' : 'BSVertexData',
+    #'BSVertexData' : 'BSVertexData',
+    #'BSVertexDataSSE' : 'BSVertexData',
     #'BSVertexDesc' : 'BSVertexDesc'
 }
 
