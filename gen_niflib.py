@@ -20,26 +20,39 @@
 # --------------------------------------------------------------------------
 # ***** BEGIN LICENSE BLOCK *****
 #
-# Copyright (c) 2005, NIF File Format Library and Tools
+#
+# This file is part of nifxml <https://www.github.com/niftools/nifxml>
+# Copyright (c) 2017-2019 NifTools
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+# This file incorporates work covered by the following copyright and permission notice:
+# Copyright (c) 2005, NIF File Format Library and Tools.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
 # are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#
-#    * Redistributions in binary form must reproduce the above
-#      copyright notice, this list of conditions and the following
-#      disclaimer in the documentation and/or other materials provided
-#      with the distribution.
-#
-#    * Neither the name of the NIF File Format Library and Tools
-#      project nor the names of its contributors may be used to endorse
-#      or promote products derived from this software without specific
-#      prior written permission.
-#
+#   - Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer.
+#   - Redistributions in binary form must reproduce the above
+#     copyright notice, this list of conditions and the following
+#     disclaimer in the documentation and/or other materials provided
+#     with the distribution.
+#   - Neither the name of the NIF File Format Library and Tools
+#     project nor the names of its contributors may be used to endorse
+#     or promote products derived from this software without specific
+#     prior written permission.
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -52,6 +65,7 @@
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
+#
 #
 # ***** END LICENSE BLOCK *****
 # --------------------------------------------------------------------------
@@ -404,7 +418,7 @@ parse_xml(NATIVETYPES)
 # global data
 #
 
-COPYRIGHT_YEAR = 2019
+COPYRIGHT_YEAR = "2005-2019"
 
 COPYRIGHT_NOTICE = r'''/* Copyright (c) {0}, NIF File Format Library and Tools
 All rights reserved.  Please see niflib.h for license. */'''.format(COPYRIGHT_YEAR)

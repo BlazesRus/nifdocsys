@@ -5,7 +5,7 @@ nifxml.py
 Parses nif.xml into dictionaries of classes grouped by XML tag type.
 
 This file is part of nifxml <https://www.github.com/niftools/nifxml>
-Copyright (c) 2017 NifTools
+Copyright (c) 2017-2019 NifTools
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
