@@ -141,14 +141,14 @@ NATIVETYPES = {
     'Color3' : 'Color3',
     'Color4' : 'Color4',
     #'ByteColor3' : 'ByteColor3', # TODO: Niflib type
-    'ByteColor4' : 'ByteColor4',
+    #'ByteColor4' : 'ByteColor4', # TODO: Niflib type
     'FilePath' : 'IndexString',
     'Vector3' : 'Vector3',
     'Vector4' : 'Vector4',
     'Quaternion' : 'Quaternion',
     'Matrix22' : 'Matrix22',
     'Matrix33' : 'Matrix33',
-    'Matrix34' : 'Matrix34',
+    #'Matrix34' : 'Matrix34', # TODO: Niflib type
     'Matrix44' : 'Matrix44',
     'hkMatrix3' : 'InertiaMatrix',
     'ShortString' : 'ShortString',
@@ -1369,9 +1369,9 @@ for n in NAMES_COMPOUND:
             CPP.code( 'info.userVersion = userVersion;' )
             CPP.code( 'info.userVersion2 = userVersion2;' )
             CPP.code( 'info.endian = EndianType(endianType);' )
-            CPP.code( 'info.creator = exportInfo.creator.str;' )
-            CPP.code( 'info.exportInfo1 = exportInfo.exportInfo1.str;' )
-            CPP.code( 'info.exportInfo2 = exportInfo.exportInfo2.str;' )
+            CPP.code( 'info.author = exportInfo.author;' )
+            CPP.code( 'info.exportScript = exportInfo.exportScript;' )
+            CPP.code( 'info.processScript = exportInfo.processScript;' )
             CPP.code()
             CPP.code( 'return info;' )
             CPP.code()
