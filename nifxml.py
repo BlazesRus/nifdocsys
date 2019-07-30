@@ -678,7 +678,7 @@ class Member:
                 if self.arr1.lhs.isdigit():
                     sep = (',(%s)'%class_name(self.type))
                     self.default = self.arr1.lhs + sep + sep.join(self.default.split(' ', int(self.arr1.lhs)))
-            elif self.type == "string" or self.type == "IndexString":
+            elif self.type == "string" or self.type == "IndexString" or self.type == "SizedString":
                 self.default = "\"" + self.default + "\""
             elif self.type == "float":
                 # Cast to float then back to string to add any missing ".0"
