@@ -1,11 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/python3-64
 """
 nifxml.py
 
 Parses nif.xml into dictionaries of classes grouped by XML tag type.
 
 This file is part of nifxml <https://www.github.com/niftools/nifxml>
-Copyright (c) 2017 NifTools
+Copyright (c) 2017-2020 NifTools
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -50,8 +50,6 @@ This file incorporates work covered by the following copyright and permission no
  POSSIBILITY OF SUCH DAMAGE.
 """
 
-from __future__ import unicode_literals
-
 from xml.dom.minidom import Node, parse
 
 import os
@@ -61,8 +59,7 @@ import re
 # Globals
 #
 
-TYPES_NATIVE = {}
-TYPES_NATIVE['TEMPLATE'] = 'T'
+TYPES_NATIVE = {'TEMPLATE': 'T'}
 TYPES_BASIC = {}
 TYPES_ENUM = {}
 TYPES_FLAG = {}
@@ -211,7 +208,7 @@ def scanBrackets(expr_str, fromIndex=0): # type: (str, int) -> Tuple[int, int]
             raise ValueError("expression syntax error (non-matching brackets?)")
     return (startpos, endpos)
 
-class Expression(object):
+class Expression:
     """This class represents an expression.
 
     >>> class A(object):
@@ -493,13 +490,11 @@ class Expression(object):
     def get_terminals(self):
         """Return all terminal names (without operators or brackets)."""
         if isinstance(self.lhs, Expression):
-            for terminal in self.lhs.get_terminals():
-                yield terminal
+            yield from self.lhs.get_terminals()
         elif self.lhs:
             yield self.lhs
         if isinstance(self.rhs, Expression):
-            for terminal in self.rhs.get_terminals():
-                yield terminal
+            yield from self.rhs.get_terminals()
         elif self.rhs:
             yield self.rhs
 
@@ -678,7 +673,7 @@ class Member:
                 if self.arr1.lhs.isdigit():
                     sep = (',(%s)'%class_name(self.type))
                     self.default = self.arr1.lhs + sep + sep.join(self.default.split(' ', int(self.arr1.lhs)))
-            elif self.type == "string" or self.type == "IndexString":
+            elif self.type == "string" or self.type == "IndexString" or self.type == "SizedString":
                 self.default = "\"" + self.default + "\""
             elif self.type == "float":
                 # Cast to float then back to string to add any missing ".0"
@@ -720,7 +715,7 @@ class Member:
         # Names of the attributes it is a condition of
         self.cond_ref = [] # type: List[str]
         sis = element.nextSibling
-        while sis != None:
+        while sis is not None:
             if sis.nodeType == Node.ELEMENT_NODE:
                 sis_name = sis.getAttribute('name')
                 sis_arr1 = Expr(sis.getAttribute('arr1'))
@@ -846,7 +841,7 @@ class Compound(Basic):
             # detect argument
             self.argument = bool(x.uses_argument)
 
-            # detect links & crossrefs
+            # detect links & cross-references
             mem = None
             try:
                 mem = TYPES_BASIC[x.type]
@@ -862,7 +857,7 @@ class Compound(Basic):
                     self.has_crossrefs = True
 
         # create duplicate chains for items that need it (only valid in current object scope)
-        #  prefer to use iterators to avoid O(n^2) but I dont know how to reset iterators
+        #  prefer to use iterators to avoid O(n^2) but I don't know how to reset iterators
         for outer in self.members:
             atx = False
             for inner in self.members:

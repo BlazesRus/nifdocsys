@@ -1,8 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/python3-64
 
 # gen_niflib.py
 #
-# This script generates C++ code for Niflib.
+# This script generates C++ code for Niflib. (Default usr setting is usr/bin/python)
 #
 # --------------------------------------------------------------------------
 # Command line options
@@ -20,26 +20,39 @@
 # --------------------------------------------------------------------------
 # ***** BEGIN LICENSE BLOCK *****
 #
-# Copyright (c) 2005, NIF File Format Library and Tools
+#
+# This file is part of nifxml <https://www.github.com/niftools/nifxml>
+# Copyright (c) 2017-2020 NifTools
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+# This file incorporates work covered by the following copyright and permission notice:
+# Copyright (c) 2005, NIF File Format Library and Tools.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
 # are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#
-#    * Redistributions in binary form must reproduce the above
-#      copyright notice, this list of conditions and the following
-#      disclaimer in the documentation and/or other materials provided
-#      with the distribution.
-#
-#    * Neither the name of the NIF File Format Library and Tools
-#      project nor the names of its contributors may be used to endorse
-#      or promote products derived from this software without specific
-#      prior written permission.
-#
+#   - Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer.
+#   - Redistributions in binary form must reproduce the above
+#     copyright notice, this list of conditions and the following
+#     disclaimer in the documentation and/or other materials provided
+#     with the distribution.
+#   - Neither the name of the NIF File Format Library and Tools
+#     project nor the names of its contributors may be used to endorse
+#     or promote products derived from this software without specific
+#     prior written permission.
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -52,6 +65,7 @@
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
+#
 #
 # ***** END LICENSE BLOCK *****
 # --------------------------------------------------------------------------
@@ -75,7 +89,6 @@
 @type ACTION_GETPTRS: C{int}
 """
 
-from __future__ import unicode_literals
 
 from textwrap import fill
 from distutils.dir_util import mkpath
@@ -85,8 +98,8 @@ import io
 import itertools
 
 from nifxml import Member, Compound, Block
-from nifxml import TYPES_BLOCK, TYPES_BASIC, TYPES_COMPOUND, TYPES_ENUM, TYPES_FLAG, TYPES_NATIVE
 from nifxml import NAMES_BLOCK, NAMES_BASIC, NAMES_COMPOUND
+from nifxml import TYPES_BLOCK, TYPES_BASIC, TYPES_COMPOUND, TYPES_ENUM, TYPES_FLAG, TYPES_NATIVE
 from nifxml import scanBrackets, define_name, parse_xml
 
 
@@ -103,48 +116,48 @@ BLK_OBJ_FILE_PREFIX = ""
 
 # The XML to niflib type mapping
 NATIVETYPES = {
-    'bool' : 'bool',
-    'byte' : 'byte',
-    'uint' : 'unsigned int',
-    'ulittle32' : 'unsigned int',
-    'ushort' : 'unsigned short',
-    'int' : 'int',
-    'short' : 'short',
-    'BlockTypeIndex' : 'unsigned short',
-    'char' : 'byte',
-    'FileVersion' : 'unsigned int',
-    'Flags' : 'unsigned short',
-    'float' : 'float',
-    'hfloat' : 'hfloat',
-    'HeaderString' : 'HeaderString',
-    'LineString' : 'LineString',
-    'Ptr' : '*',
-    'Ref' : 'Ref',
-    'StringOffset' : 'unsigned int',
-    'StringIndex' : 'IndexString',
-    'SizedString' : 'string',
-    'string' : 'IndexString',
-    'Color3' : 'Color3',
-    'Color4' : 'Color4',
-    #'ByteColor3' : 'ByteColor3', # TODO: Niflib type
-    'ByteColor4' : 'ByteColor4',
-    'FilePath' : 'IndexString',
-    'Vector3' : 'Vector3',
-    'Vector4' : 'Vector4',
-    'Quaternion' : 'Quaternion',
-    'Matrix22' : 'Matrix22',
-    'Matrix33' : 'Matrix33',
-    'Matrix34' : 'Matrix34',
-    'Matrix44' : 'Matrix44',
-    'hkMatrix3' : 'InertiaMatrix',
-    'ShortString' : 'ShortString',
-    'Key' : 'Key',
-    'QuatKey' : 'Key',
-    'TexCoord' : 'TexCoord',
-    'Triangle' : 'Triangle',
-    'BSVertexData' : 'BSVertexData',
-    'BSVertexDataSSE' : 'BSVertexData',
-    #'BSVertexDesc' : 'BSVertexDesc'
+    'bool': 'bool',
+    'byte': 'byte',
+    'uint': 'unsigned int',
+    'ulittle32': 'unsigned int',
+    'ushort': 'unsigned short',
+    'int': 'int',
+    'short': 'short',
+    'BlockTypeIndex': 'unsigned short',
+    'char': 'byte',
+    'FileVersion': 'unsigned int',
+    'Flags': 'unsigned short',
+    'float': 'float',
+    'hfloat': 'hfloat',
+    'HeaderString': 'HeaderString',
+    'LineString': 'LineString',
+    'Ptr': '*',
+    'Ref': 'Ref',
+    'StringOffset': 'unsigned int',
+    'StringIndex': 'IndexString',
+    'SizedString': 'string',
+    'string': 'IndexString',
+    'Color3': 'Color3',
+    'Color4': 'Color4',
+    # 'ByteColor3' : 'ByteColor3', # TODO: Niflib type
+    # 'ByteColor4' : 'ByteColor4', # TODO: Niflib type
+    'FilePath': 'IndexString',
+    'Vector3': 'Vector3',
+    'Vector4': 'Vector4',
+    'Quaternion': 'Quaternion',
+    'Matrix22': 'Matrix22',
+    'Matrix33': 'Matrix33',
+    # 'Matrix34' : 'Matrix34', # TODO: Niflib type
+    'Matrix44': 'Matrix44',
+    'hkMatrix3': 'InertiaMatrix',
+    'ShortString': 'ShortString',
+    'Key': 'Key',
+    'QuatKey': 'Key',
+    'TexCoord': 'TexCoord',
+    'Triangle': 'Triangle',
+    # 'BSVertexData' : 'BSVertexData',
+    # 'BSVertexDataSSE' : 'BSVertexData',
+    # 'BSVertexDesc' : 'BSVertexDesc'
 }
 
 #
@@ -173,9 +186,7 @@ def member_code_declare(self, prefix=""):
         if self.arr1_ref:
             if not self.arr1 or not self.arr1.lhs: # Simple Scalar
                 keyword = "mutable "
-        elif self.arr2_ref: # 1-dimensional dynamic array
-            keyword = "mutable "
-        elif self.is_calculated:
+        elif self.arr2_ref or self.is_calculated:  # 1-dimensional dynamic array or is calculated
             keyword = "mutable "
 
     if self.ctemplate:
@@ -404,7 +415,7 @@ parse_xml(NATIVETYPES)
 # global data
 #
 
-COPYRIGHT_YEAR = 2017
+COPYRIGHT_YEAR = "2005-2020"
 
 COPYRIGHT_NOTICE = r'''/* Copyright (c) {0}, NIF File Format Library and Tools
 All rights reserved.  Please see niflib.h for license. */'''.format(COPYRIGHT_YEAR)
@@ -451,7 +462,8 @@ NIFLIB_API static NiObject * Create();
 /*!
  * Summarizes the information contained in this object in English.
  * \param[in] verbose Determines whether or not detailed information about large areas of data will be printed out.
- * \return A string containing a summary of the information within the object in English.  This is the function that Niflyze calls to generate its analysis, so the output is the same.
+ * \return A string containing a summary of the information within the object in English.
+ *  This is the function that Niflyze calls to generate its analysis, so the output is the same.
  */
 NIFLIB_API virtual string asString( bool verbose = false ) const;
 
@@ -658,7 +670,7 @@ class CFile(io.TextIOWrapper):
         if self.namespaced:
             return
         self.namespaced = True
-        self.write( 'namespace {0} {{\n'.format(txt) )
+        self.write( f'namespace {txt} {{\n' )
 
     def include(self, txt):
         """
@@ -667,16 +679,18 @@ class CFile(io.TextIOWrapper):
         @type txt: str
         """
         if (txt.startswith('<') and txt.endswith('>')) or (txt.startswith('"') and txt.endswith('"')):
-            self.write( '#include {0}\n'.format(txt) )
+            self.write( f'#include {txt}\n' )
         else:
-            self.write( '#include "{0}"\n'.format(txt) )
+            self.write( f'#include "{txt}"\n' )
 
-    def comment(self, txt, doxygen=True):
+    def comment(self, txt, doxygen):
         """
         Wraps text in C++ comments and outputs it to the file.  Handles multilined comments as well.
         Result always ends with a newline
         @param txt: The text to enclose in a Doxygen comment
         @type txt: string
+        @param doxygen: Indicates if writes comment as doxygen style comment
+        @type doxygen: bool
         """
 
         # skip comments when we are in backslash mode
@@ -724,7 +738,7 @@ class CFile(io.TextIOWrapper):
                     elif not mem.is_public and not prot_mode:
                         self.code('protected:')
                         prot_mode = True
-                self.comment(mem.description)
+                self.comment(mem.description, True)
                 self.code(mem.code_declare())
                 if mem.func:
                     self.comment(mem.description)
@@ -921,10 +935,10 @@ class CFile(io.TextIOWrapper):
                     if y.ver2:
                         verexpr = "%s%s( info.version <= 0x%08X )"%(verexpr, concat, y.ver2)
                         concat = " && "
-                    if y.userver != None:
+                    if y.userver is not None:
                         verexpr = "%s%s( info.userVersion == %s )"%(verexpr, concat, y.userver)
                         concat = " && "
-                    if y.userver2 != None:
+                    if y.userver2 is not None:
                         verexpr = "%s%s( info.userVersion2 == %s )"%(verexpr, concat, y.userver2)
                         concat = " && "
                     if y_vercond:
@@ -1108,20 +1122,9 @@ class CFile(io.TextIOWrapper):
 # Function to extract custom code from existing file
 #
 def extract_custom_code(name):
-    custom = {}
-    custom['MISC'] = []
-    custom['FILE HEAD'] = []
-    custom['FILE FOOT'] = []
-    custom['PRE-READ'] = []
-    custom['POST-READ'] = []
-    custom['PRE-WRITE'] = []
-    custom['POST-WRITE'] = []
-    custom['PRE-STRING'] = []
-    custom['POST-STRING'] = []
-    custom['PRE-FIXLINKS'] = []
-    custom['POST-FIXLINKS'] = []
-    custom['CONSTRUCTOR'] = []
-    custom['DESTRUCTOR'] = []
+    custom = {'MISC': [], 'FILE HEAD': [], 'FILE FOOT': [], 'PRE-READ': [], 'POST-READ': [], 'PRE-WRITE': [],
+              'POST-WRITE': [], 'PRE-STRING': [], 'POST-STRING': [], 'PRE-FIXLINKS': [], 'POST-FIXLINKS': [],
+              'CONSTRUCTOR': [], 'DESTRUCTOR': []}
 
     if os.path.isfile(name) is False:
         custom['MISC'].append('\n')
@@ -1139,7 +1142,7 @@ def extract_custom_code(name):
         custom['DESTRUCTOR'].append('\n')
         return custom
 
-    f = io.open(name, 'rt', 1, 'utf-8')
+    f = open(name, 'rt', 1, 'utf-8')
     lines = f.readlines()
     f.close()
 
@@ -1207,8 +1210,8 @@ def overwrite_if_changed( original_file, candidate_file ):
     files_differ = False
 
     if os.path.isfile( original_file ):
-        file1 = io.open( original_file, 'r' )
-        file2 = io.open( candidate_file, 'r' )
+        file1 = open( original_file, 'r' )
+        file2 = open( candidate_file, 'r' )
 
         str1 = file1.read()
         str2 = file2.read()
@@ -1240,7 +1243,7 @@ mkpath(os.path.join(ROOT_DIR, "src/gen"))
 for n in NAMES_COMPOUND:
     x = TYPES_COMPOUND[n]
     # skip natively implemented types
-    if x.name in NATIVETYPES.keys():
+    if x.name in list(NATIVETYPES.keys()):
         continue
     if not GENALLFILES and not x.cname in GENBLOCKS:
         continue
@@ -1249,7 +1252,8 @@ for n in NAMES_COMPOUND:
     file_name = ROOT_DIR + '/include/gen/' + x.cname + '.h'
     custom_lines = extract_custom_code( file_name )
 
-    HDR = CFile(io.open(file_name, 'wb'))
+    HDR = CFile(open(file_name, 'wb'))
+    print("Generating " + file_name)
     HDR.code( FULLGEN_NOTICE )
     HDR.guard( x.cname.upper() )
     HDR.code()
@@ -1261,7 +1265,7 @@ for n in NAMES_COMPOUND:
     HDR.code( x.code_fwd_decl() )
     HDR.code()
     # header
-    HDR.comment(x.description)
+    HDR.comment(x.description, True)
     hdr = "struct %s"%x.cname
     if x.template:
         hdr = "template <class T >\n%s"%hdr
@@ -1304,7 +1308,8 @@ for n in NAMES_COMPOUND:
         file_name = ROOT_DIR + '/src/gen/' + x.cname + '.cpp'
         custom_lines = extract_custom_code( file_name )
 
-        CPP = CFile(io.open(file_name, 'wb'))
+        CPP = CFile(open(file_name, 'wb'))
+        print("Generating " + file_name)
         CPP.code( PARTGEN_NOTICE )
         CPP.code()
         CPP.code( x.code_include_cpp( True, "../../include/gen/", "../../include/obj/" ) )
@@ -1396,7 +1401,7 @@ for n in NAMES_COMPOUND:
 
     # Write out Public Enumeration header Enumerations
 if GENALLFILES:
-    HDR = CFile(io.open(ROOT_DIR + '/include/gen/enums.h', 'wb'))
+    HDR = CFile(open(ROOT_DIR + '/include/gen/enums.h', 'wb'))
     HDR.code( FULLGEN_NOTICE )
     HDR.guard( 'NIF_ENUMS' )
     HDR.code()
@@ -1405,10 +1410,10 @@ if GENALLFILES:
     HDR.code()
     HDR.namespace( 'Niflib' )
     HDR.code()
-    for n, x in itertools.chain(TYPES_ENUM.items(), TYPES_FLAG.items()):
+    for n, x in itertools.chain(list(TYPES_ENUM.items()), list(TYPES_FLAG.items())):
         if x.options:
             if x.description:
-                HDR.comment(x.description)
+                HDR.comment(x.description, True)
             HDR.code('enum %s {'%(x.cname))
             for o in x.options:
                 HDR.code('%s = %s, /*!< %s */'%(o.cname, o.value, o.description))
@@ -1420,7 +1425,7 @@ if GENALLFILES:
 
     # Write out Internal Enumeration header (NifStream functions)
 if GENALLFILES:
-    HDR = CFile(io.open(ROOT_DIR + '/include/gen/enums_intl.h', 'wb'))
+    HDR = CFile(open(ROOT_DIR + '/include/gen/enums_intl.h', 'wb'))
     HDR.code( FULLGEN_NOTICE )
     HDR.guard( 'NIF_ENUMS_INTL' )
     HDR.code()
@@ -1431,7 +1436,7 @@ if GENALLFILES:
     HDR.code()
     HDR.namespace( 'Niflib' )
     HDR.code()
-    for n, x in itertools.chain(TYPES_ENUM.items(), TYPES_FLAG.items()):
+    for n, x in itertools.chain(list(TYPES_ENUM.items()), list(TYPES_FLAG.items())):
         if x.options:
             if x.description:
                 HDR.code()
@@ -1444,7 +1449,7 @@ if GENALLFILES:
 
     #Write out Enumeration Implementation
 if GENALLFILES:
-    CPP = CFile(io.open(ROOT_DIR + '/src/gen/enums.cpp', 'wb'))
+    CPP = CFile(open(ROOT_DIR + '/src/gen/enums.cpp', 'wb'))
     CPP.code( FULLGEN_NOTICE )
     CPP.code()
     CPP.include('<string>')
@@ -1458,16 +1463,16 @@ if GENALLFILES:
     CPP.namespace( 'Niflib' )
     CPP.code()
     CPP.code()
-    for n, x in itertools.chain(TYPES_ENUM.items(), TYPES_FLAG.items()):
+    for n, x in itertools.chain(list(TYPES_ENUM.items()), list(TYPES_FLAG.items())):
         if x.options:
-            CPP.code( ENUM_IMPL.format(x.cname, x.storage, r''.join((ENUM_IMPL_CASE.format(o.cname, o.name) for o in x.options))) )
+            CPP.code( ENUM_IMPL.format(x.cname, x.storage, r''.join(ENUM_IMPL_CASE.format(o.cname, o.name) for o in x.options)) )
             CPP.code()
     CPP.end()
 
     #
     # NiObject Registration Function
     #
-    CPP = CFile(io.open(ROOT_DIR + '/src/gen/register.cpp', 'wb'))
+    CPP = CFile(open(ROOT_DIR + '/src/gen/register.cpp', 'wb'))
     CPP.code( FULLGEN_NOTICE )
     CPP.code()
     CPP.include( '../../include/ObjectRegistry.h' )
@@ -1504,7 +1509,8 @@ for n in NAMES_BLOCK:
     custom_lines = extract_custom_code( file_name )
 
     #output new file
-    HDR = CFile(io.open(file_name, 'wb'))
+    HDR = CFile(open(file_name, 'wb'))
+    print("Generating " + file_name)
     HDR.code( PARTGEN_NOTICE )
     HDR.guard( x.cname.upper() )
     HDR.code()
@@ -1524,7 +1530,7 @@ for n in NAMES_BLOCK:
     HDR.code( 'class ' + x.cname + ';' )
     HDR.code( 'typedef Ref<' + x.cname + '> ' + x.cname + 'Ref;' )
     HDR.code()
-    HDR.comment( x.description )
+    HDR.comment( x.description, True)
     if x.inherit:
         HDR.code( 'class ' + x.cname + ' : public ' + x.inherit.cname + ' {' )
     else:
@@ -1537,7 +1543,7 @@ for n in NAMES_BLOCK:
     # Show example naive implementation if requested
     #
 
-    # Create a list of members eligable for functions
+    # Create a list of members eligible for functions
     if GENACCESSORS:
         func_members = []
         for bmem in x.members:
@@ -1561,7 +1567,7 @@ for n in NAMES_BLOCK:
 
     HDR.code( BEG_MISC )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['MISC']:
         HDR.write(line)
 
@@ -1575,7 +1581,7 @@ for n in NAMES_BLOCK:
     HDR.code()
     HDR.code( BEG_FOOT )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['FILE FOOT']:
         HDR.write(line)
 
@@ -1583,23 +1589,24 @@ for n in NAMES_BLOCK:
     HDR.code()
     HDR.end()
 
-    ##Check if the temp file is identical to the target file
-    #overwrite_if_changed( file_name, 'temp' )
+    # Check if the temp file is identical to the target file
+    # overwrite_if_changed( file_name, 'temp' )
 
     #
     # NiObject Implementation File
     #
 
-    #Get existing custom code
+    # Get existing custom code
     file_name = ROOT_DIR + '/src/obj/' + x.cname + '.cpp'
     custom_lines = extract_custom_code( file_name )
 
-    CPP = CFile(io.open(file_name, 'wb'))
+    CPP = CFile(open(file_name, 'wb'))
+    print("Generating " + file_name)
     CPP.code( PARTGEN_NOTICE )
     CPP.code()
     CPP.code( BEG_HEAD )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['FILE HEAD']:
         CPP.write(line)
 
@@ -1624,7 +1631,7 @@ for n in NAMES_BLOCK:
         CPP.code( x.cname + '::' + x.cname + '() {' )
     CPP.code ( BEG_CTOR )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['CONSTRUCTOR']:
         CPP.write(line)
 
@@ -1635,7 +1642,7 @@ for n in NAMES_BLOCK:
     CPP.code( x.cname + '::' + '~' + x.cname + '() {' )
     CPP.code ( BEG_DTOR )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['DESTRUCTOR']:
         CPP.write(line)
 
@@ -1654,7 +1661,7 @@ for n in NAMES_BLOCK:
     CPP.code("void %s::Read( istream& in, list<unsigned int> & link_stack, const NifInfo & info ) {"%x.cname)
     CPP.code( BEG_PRE_READ )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['PRE-READ']:
         CPP.write(line)
 
@@ -1664,7 +1671,7 @@ for n in NAMES_BLOCK:
     CPP.code()
     CPP.code( BEG_POST_READ )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['POST-READ']:
         CPP.write(line)
 
@@ -1675,7 +1682,7 @@ for n in NAMES_BLOCK:
     CPP.code("void %s::Write( ostream& out, const map<NiObjectRef,unsigned int> & link_map, list<NiObject *> & missing_link_stack, const NifInfo & info ) const {"%x.cname)
     CPP.code( BEG_PRE_WRITE )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['PRE-WRITE']:
         CPP.write(line)
 
@@ -1685,7 +1692,7 @@ for n in NAMES_BLOCK:
     CPP.code()
     CPP.code( BEG_POST_WRITE )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['POST-WRITE']:
         CPP.write(line)
 
@@ -1696,7 +1703,7 @@ for n in NAMES_BLOCK:
     CPP.code("std::string %s::asString( bool verbose ) const {"%x.cname)
     CPP.code( BEG_PRE_STRING )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['PRE-STRING']:
         CPP.write(line)
 
@@ -1706,7 +1713,7 @@ for n in NAMES_BLOCK:
     CPP.code()
     CPP.code( BEG_POST_STRING )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['POST-STRING']:
         CPP.write(line)
 
@@ -1718,7 +1725,7 @@ for n in NAMES_BLOCK:
 
     CPP.code( BEG_PRE_FIXLINK )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['PRE-FIXLINKS']:
         CPP.write(line)
 
@@ -1727,7 +1734,7 @@ for n in NAMES_BLOCK:
     CPP.stream(x, ACTION_FIXLINKS)
     CPP.code()
     CPP.code( BEG_POST_FIXLINK )
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['POST-FIXLINKS']:
         CPP.write(line)
 
@@ -1745,7 +1752,7 @@ for n in NAMES_BLOCK:
     CPP.code("}")
     CPP.code()
 
-    # Output example implementation of public getter/setter Mmthods if requested
+    # Output example implementation of public getter/setter Methods if requested
     if GENACCESSORS:
         func_members = []
         for bmem in x.members:
@@ -1771,13 +1778,13 @@ for n in NAMES_BLOCK:
 
     CPP.code( BEG_MISC )
 
-    #Preserve Custom code from before
+    # Preserve Custom code from before
     for line in custom_lines['MISC']:
         CPP.write(line)
 
     CPP.code( END_CUSTOM )
 
-    ##Check if the temp file is identical to the target file
-    #overwrite_if_changed( file_name, 'temp' )
+    # Check if the temp file is identical to the target file
+    # overwrite_if_changed( file_name, 'temp' )
 
     CPP.end()

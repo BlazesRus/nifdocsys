@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3-64
 """
 nifdoc.py
 
@@ -8,7 +8,7 @@ To list command line options run:
     nifdoc.py -h
 
 This file is part of nifxml <https://www.github.com/niftools/nifxml>
-Copyright (c) 2017 NifTools
+Copyright (c) 2017-2020 NifTools
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,7 +23,6 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from __future__ import unicode_literals
 
 import re
 import os
@@ -68,7 +67,7 @@ def main():
     metadata = True
     minver = ''
 
-    # Command line args
+    # Command line arguments
     parser = argparse.ArgumentParser(description="NIF Format XML Docs Generation")
     parser.add_argument('-p', '--path', help="The path where the doc folder will be generated.")
     parser.add_argument('-no-h1', '--no-heading', action='store_true',
@@ -95,7 +94,7 @@ def main():
     doc.gen_pages(NAMES_COMPOUND, TYPES_COMPOUND, tmpl.COMPOUND if metadata else tmpl.COMPOUND_NO_META)
     # Generate Basic Pages
     doc.gen_pages(NAMES_BASIC, TYPES_BASIC, tmpl.BASIC)
-    # Generate Enum Pages
+    # Generate Enumeration Pages
     enums = dict(TYPES_ENUM, **TYPES_FLAG)
     doc.gen_pages(sorted(enums), enums, tmpl.ENUM)
 
@@ -254,7 +253,7 @@ class DocGenerator():
 
             page = {'title': tag.name, 'contents': template.format(**contents)}
 
-            html = io.open(self.doc_file.format(clean(tag.name)), 'wt', 1, 'utf-8')
+            html = open(self.doc_file.format(clean(tag.name)), 'wt', 1, 'utf-8')
             html.write( self.main.format(**page) )
             html.close()
 
@@ -271,7 +270,7 @@ class DocGenerator():
         else:
             page['contents'] = tmpl.LIST.format(**contents)
 
-        html = io.open(self.doc_file.format(pagename), 'wt', 1, 'utf-8')
+        html = open(self.doc_file.format(pagename), 'wt', 1, 'utf-8')
         html.write( self.main.format(**page) )
         html.close()
 
@@ -284,7 +283,7 @@ class DocGenerator():
         }
         page['contents'] = tmpl.NAV_HIER.format(**contents)
 
-        html = io.open(self.doc_file.format('index'), 'wt', 1, 'utf-8')
+        html = open(self.doc_file.format('index'), 'wt', 1, 'utf-8')
         html.write( self.main.format(**page) )
         html.close()
 
