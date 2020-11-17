@@ -1,4 +1,4 @@
-#!/usr/bin/python3-64
+#!/usr/bin/python3
 """
 nifdoc.py
 

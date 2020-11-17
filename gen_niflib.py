@@ -1,8 +1,8 @@
-#!/usr/bin/python3-64
+#!/usr/bin/python3
 
 # gen_niflib.py
 #
-# This script generates C++ code for Niflib. (Default usr setting is usr/bin/python)
+# This script generates C++ code for Niflib.
 #
 # --------------------------------------------------------------------------
 # Command line options
@@ -20,9 +20,8 @@
 # --------------------------------------------------------------------------
 # ***** BEGIN LICENSE BLOCK *****
 #
-#
 # This file is part of nifxml <https://www.github.com/niftools/nifxml>
-# Copyright (c) 2017-2020 NifTools
+# Copyright (c) 2017-2019 NifTools
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -116,48 +115,48 @@ BLK_OBJ_FILE_PREFIX = ""
 
 # The XML to niflib type mapping
 NATIVETYPES = {
-    'bool': 'bool',
-    'byte': 'byte',
-    'uint': 'unsigned int',
-    'ulittle32': 'unsigned int',
-    'ushort': 'unsigned short',
-    'int': 'int',
-    'short': 'short',
-    'BlockTypeIndex': 'unsigned short',
-    'char': 'byte',
-    'FileVersion': 'unsigned int',
-    'Flags': 'unsigned short',
-    'float': 'float',
-    'hfloat': 'hfloat',
-    'HeaderString': 'HeaderString',
-    'LineString': 'LineString',
-    'Ptr': '*',
-    'Ref': 'Ref',
-    'StringOffset': 'unsigned int',
-    'StringIndex': 'IndexString',
-    'SizedString': 'string',
-    'string': 'IndexString',
-    'Color3': 'Color3',
-    'Color4': 'Color4',
-    # 'ByteColor3' : 'ByteColor3', # TODO: Niflib type
-    # 'ByteColor4' : 'ByteColor4', # TODO: Niflib type
-    'FilePath': 'IndexString',
-    'Vector3': 'Vector3',
-    'Vector4': 'Vector4',
-    'Quaternion': 'Quaternion',
-    'Matrix22': 'Matrix22',
-    'Matrix33': 'Matrix33',
-    # 'Matrix34' : 'Matrix34', # TODO: Niflib type
-    'Matrix44': 'Matrix44',
-    'hkMatrix3': 'InertiaMatrix',
-    'ShortString': 'ShortString',
-    'Key': 'Key',
-    'QuatKey': 'Key',
-    'TexCoord': 'TexCoord',
-    'Triangle': 'Triangle',
-    # 'BSVertexData' : 'BSVertexData',
-    # 'BSVertexDataSSE' : 'BSVertexData',
-    # 'BSVertexDesc' : 'BSVertexDesc'
+    'bool' : 'bool',
+    'byte' : 'byte',
+    'uint' : 'unsigned int',
+    'ulittle32' : 'unsigned int',
+    'ushort' : 'unsigned short',
+    'int' : 'int',
+    'short' : 'short',
+    'BlockTypeIndex' : 'unsigned short',
+    'char' : 'byte',
+    'FileVersion' : 'unsigned int',
+    'Flags' : 'unsigned short',
+    'float' : 'float',
+    'hfloat' : 'hfloat',
+    'HeaderString' : 'HeaderString',
+    'LineString' : 'LineString',
+    'Ptr' : '*',
+    'Ref' : 'Ref',
+    'StringOffset' : 'unsigned int',
+    'StringIndex' : 'IndexString',
+    'SizedString' : 'string',
+    'string' : 'IndexString',
+    'Color3' : 'Color3',
+    'Color4' : 'Color4',
+    #'ByteColor3' : 'ByteColor3', # TODO: Niflib type
+    #'ByteColor4' : 'ByteColor4', # TODO: Niflib type
+    'FilePath' : 'IndexString',
+    'Vector3' : 'Vector3',
+    'Vector4' : 'Vector4',
+    'Quaternion' : 'Quaternion',
+    'Matrix22' : 'Matrix22',
+    'Matrix33' : 'Matrix33',
+    #'Matrix34' : 'Matrix34', # TODO: Niflib type
+    'Matrix44' : 'Matrix44',
+    'hkMatrix3' : 'InertiaMatrix',
+    'ShortString' : 'ShortString',
+    'Key' : 'Key',
+    'QuatKey' : 'Key',
+    'TexCoord' : 'TexCoord',
+    'Triangle' : 'Triangle',
+    #'BSVertexData' : 'BSVertexData',
+    #'BSVertexDataSSE' : 'BSVertexData',
+    #'BSVertexDesc' : 'BSVertexDesc'
 }
 
 #
@@ -197,12 +196,12 @@ def member_code_declare(self, prefix=""):
     if self.arr1.lhs:
         if self.arr1.lhs.isdigit():
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                result = "Niflib::array< %s, Niflib::array<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
+                result = "Niflib::NifArray< %s, Niflib::NifArray<%s,%s > >"%(self.arr1.lhs, self.arr2.lhs, result)
             else:
-                result = "Niflib::array<%s,%s >"%(self.arr1.lhs, result)
+                result = "Niflib::NifArray<%s,%s >"%(self.arr1.lhs, result)
         else:
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                result = "vector< Niflib::array<%s,%s > >"%(self.arr2.lhs, result)
+                result = "vector< Niflib::NifArray<%s,%s > >"%(self.arr2.lhs, result)
             else:
                 if self.arr2.lhs:
                     result = "vector< vector<%s > >"%result
@@ -221,17 +220,17 @@ def member_getter_declare(self, scope="", suffix=""):
             ltype = "%s *"%self.ctemplate
     if self.arr1.lhs:
         if self.arr1.lhs.isdigit():
-            ltype = "Niflib::array<%s,%s > "%(self.arr1.lhs, ltype)
+            ltype = "Niflib::NifArray<%s,%s > "%(self.arr1.lhs, ltype)
             # ltype = ltype
         else:
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                ltype = "vector< Niflib::array<%s,%s > >"%(self.arr2.lhs, ltype)
+                ltype = "vector< Niflib::NifArray<%s,%s > >"%(self.arr2.lhs, ltype)
             else:
                 ltype = "vector<%s >"%ltype
         if self.arr2.lhs:
             if self.arr2.lhs.isdigit():
                 if self.arr1.lhs.isdigit():
-                    ltype = "Niflib::array<%s,%s >"%(self.arr2.lhs, ltype)
+                    ltype = "Niflib::NifArray<%s,%s >"%(self.arr2.lhs, ltype)
                     # ltype = ltype
             else:
                 ltype = "vector<%s >"%ltype
@@ -250,12 +249,12 @@ def member_setter_declare(self, scope="", suffix=""):
         if self.arr1.lhs.isdigit():
             # ltype = "const %s&"%ltype
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                ltype = "const Niflib::array< %s, Niflib::array<%s,%s > >&"%(self.arr1.lhs, self.arr2.lhs, ltype)
+                ltype = "const Niflib::NifArray< %s, Niflib::NifArray<%s,%s > >&"%(self.arr1.lhs, self.arr2.lhs, ltype)
             else:
-                ltype = "const Niflib::array<%s,%s >& "%(self.arr1.lhs, ltype)
+                ltype = "const Niflib::NifArray<%s,%s >& "%(self.arr1.lhs, ltype)
         else:
             if self.arr2.lhs and self.arr2.lhs.isdigit():
-                ltype = "const vector< Niflib::array<%s,%s > >&"%(self.arr2.lhs, ltype)
+                ltype = "const vector< Niflib::NifArray<%s,%s > >&"%(self.arr2.lhs, ltype)
             else:
                 ltype = "const vector<%s >&"%ltype
     else:
@@ -1252,7 +1251,7 @@ for n in NAMES_COMPOUND:
     file_name = ROOT_DIR + '/include/gen/' + x.cname + '.h'
     custom_lines = extract_custom_code( file_name )
 
-    HDR = CFile(open(file_name, 'wb'))
+    HDR = CFile(io.open(file_name, 'wb'))
     print("Generating " + file_name)
     HDR.code( FULLGEN_NOTICE )
     HDR.guard( x.cname.upper() )
@@ -1308,7 +1307,7 @@ for n in NAMES_COMPOUND:
         file_name = ROOT_DIR + '/src/gen/' + x.cname + '.cpp'
         custom_lines = extract_custom_code( file_name )
 
-        CPP = CFile(open(file_name, 'wb'))
+        CPP = CFile(io.open(file_name, 'wb'))
         print("Generating " + file_name)
         CPP.code( PARTGEN_NOTICE )
         CPP.code()
@@ -1358,9 +1357,9 @@ for n in NAMES_COMPOUND:
             CPP.code( 'info.userVersion = userVersion;' )
             CPP.code( 'info.userVersion2 = userVersion2;' )
             CPP.code( 'info.endian = EndianType(endianType);' )
-            CPP.code( 'info.creator = exportInfo.creator.str;' )
-            CPP.code( 'info.exportInfo1 = exportInfo.exportInfo1.str;' )
-            CPP.code( 'info.exportInfo2 = exportInfo.exportInfo2.str;' )
+            CPP.code( 'info.author = exportInfo.author;' )
+            CPP.code( 'info.exportScript = exportInfo.exportScript;' )
+            CPP.code( 'info.processScript = exportInfo.processScript;' )
             CPP.code()
             CPP.code( 'return info;' )
             CPP.code()
@@ -1509,7 +1508,7 @@ for n in NAMES_BLOCK:
     custom_lines = extract_custom_code( file_name )
 
     #output new file
-    HDR = CFile(open(file_name, 'wb'))
+    HDR = CFile(io.open(file_name, 'wb'))
     print("Generating " + file_name)
     HDR.code( PARTGEN_NOTICE )
     HDR.guard( x.cname.upper() )
@@ -1600,7 +1599,7 @@ for n in NAMES_BLOCK:
     file_name = ROOT_DIR + '/src/obj/' + x.cname + '.cpp'
     custom_lines = extract_custom_code( file_name )
 
-    CPP = CFile(open(file_name, 'wb'))
+    CPP = CFile(io.open(file_name, 'wb'))
     print("Generating " + file_name)
     CPP.code( PARTGEN_NOTICE )
     CPP.code()
