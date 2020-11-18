@@ -1,3 +1,6 @@
 [submodule "kfmxml"]
 	path = kfmxml
 	url = https://github.com/niftools/kfmxml.git
+[submodule "nifxml"]
+	path = nifxml
+	url = https://github.com/BlazesRus/nifxml.git

@@ -564,24 +564,24 @@ class Option:
 
 class Member:
     """
-    This class represents the nif.xml <add> tag.
-    @ivar name:  The name of this member variable.  Comes from the "name" attribute of the <add> tag.
-    @ivar arg: The argument of this member variable.  Comes from the "arg" attribute of the <add> tag.
-    @ivar template: The template type of this member variable.  Comes from the "template" attribute of the <add> tag.
-    @ivar arr1: The first array size of this member variable.  Comes from the "arr1" attribute of the <add> tag.
-    @ivar arr2: The first array size of this member variable.  Comes from the "arr2" attribute of the <add> tag.
-    @ivar cond: The condition of this member variable.  Comes from the "cond" attribute of the <add> tag.
-    @ivar func: The function of this member variable.  Comes from the "func" attribute of the <add> tag.
-    @ivar default: The default value of this member variable.  Comes from the "default" attribute of the <add> tag.
+    This class represents the nif.xml <field> tag.
+    @ivar name:  The name of this member variable.  Comes from the "name" attribute of the <field> tag.
+    @ivar arg: The argument of this member variable.  Comes from the "arg" attribute of the <field> tag.
+    @ivar template: The template type of this member variable.  Comes from the "template" attribute of the <field> tag.
+    @ivar arr1: The first array size of this member variable.  Comes from the "arr1" attribute of the <field> tag.
+    @ivar arr2: The first array size of this member variable.  Comes from the "arr2" attribute of the <field> tag.
+    @ivar cond: The condition of this member variable.  Comes from the "cond" attribute of the <field> tag.
+    @ivar func: The function of this member variable.  Comes from the "func" attribute of the <field> tag.
+    @ivar default: The default value of this member variable.  Comes from the "default" attribute of the <field> tag.
         Formatted to be ready to use in a C++ constructor initializer list.
-    @ivar ver1: The first version this member exists.  Comes from the "ver1" attribute of the <add> tag.
-    @ivar ver2: The last version this member exists.  Comes from the "ver2" attribute of the <add> tag.
-    @ivar userver: The user version where this member exists.  Comes from the "userver" attribute of the <add> tag.
-    @ivar userver2: The user version 2 where this member exists.  Comes from the "userver2" attribute of the <add> tag.
-    @ivar vercond: The version condition of this member variable.  Comes from the "vercond" attribute of the <add> tag.
-    @ivar is_public: Whether this member will be declared public.  Comes from the "public" attribute of the <add> tag.
+    @ivar ver1: The first version this member exists.  Comes from the "ver1" attribute of the <field> tag.
+    @ivar ver2: The last version this member exists.  Comes from the "ver2" attribute of the <field> tag.
+    @ivar userver: The user version where this member exists.  Comes from the "userver" attribute of the <field> tag.
+    @ivar userver2: The user version 2 where this member exists.  Comes from the "userver2" attribute of the <field> tag.
+    @ivar vercond: The version condition of this member variable.  Comes from the "vercond" attribute of the <field> tag.
+    @ivar is_public: Whether this member will be declared public.  Comes from the "public" attribute of the <field> tag.
     @ivar is_abstract: Whether this member is abstract.  This means that it does not factor into read/write.
-    @ivar description: The description of this member variable.  Comes from the text between <add> and </add>.
+    @ivar description: The description of this member variable.  Comes from the text between <field> and </field>.
     @ivar uses_argument: Specifies whether this attribute uses an argument.
     @ivar type_is_native: Specifies whether the type is implemented natively
     @ivar is_duplicate: Specifies whether this is a duplicate of a previously declared member
@@ -601,7 +601,7 @@ class Member:
     """
     def __init__(self, element):
         """
-        This constructor converts an XML <add> element into a Member object.
+        This constructor converts an XML <field> element into a Member object.
         Some sort of processing is applied to the various variables that are copied from the XML tag...
         Seems to be trying to set reasonable defaults for certain types, and put things into C++ format generally.
         @param prefix: An optional prefix used in some situations?
@@ -609,9 +609,9 @@ class Member:
         @return The expression formatted into a string?
         @rtype: string?
         """
-        assert element.tagName == 'add'
+        assert element.tagName == 'field'
         parent = element.parentNode
-        sisters = parent.getElementsByTagName('add')
+        sisters = parent.getElementsByTagName('field')
 
         # member attributes
         self.name      = element.getAttribute('name') # type: str
@@ -816,7 +816,7 @@ class Compound(Basic):
         self.argument = False # type: bool
 
         # store all attribute data & calculate stuff
-        for member in element.getElementsByTagName('add'):
+        for member in element.getElementsByTagName('field'):
             x = Member(member)
             #***********************
             #** NIFLIB HACK BEGIN **
