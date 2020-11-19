@@ -751,7 +751,7 @@ class CFile(io.TextIOWrapper):
                 self.comment(mem.description, True)
                 self.code(mem.code_declare())
                 if mem.func:
-                    self.comment(mem.description)
+                    self.comment(mem.description, True)
                     self.code("%s %s() const;" % (mem.ctype, mem.func))
 
     def stream(self, block, action, localprefix="", prefix="", arg_prefix="", arg_member=None):
@@ -991,11 +991,11 @@ class CFile(io.TextIOWrapper):
                         memcode = "%s%s.resize(%s);" % (y_prefix, y.cname, y.arr1.code(y_arr1_prefix))
                         mem = block.find_member(y.arr1.lhs, True)  # find member in self or parents
                         self.code(memcode)
-                    self.code( \
+                    self.code(
                         "for (unsigned int i%i = 0; i%i < %s%s.size(); i%i++) {" \
                         % (self.indent, self.indent, y_prefix, y.cname, self.indent))
                 else:
-                    self.code( \
+                    self.code(
                         "for (unsigned int i%i = 0; i%i < %s; i%i++) {" \
                         % (self.indent, self.indent, y.arr1.code(y_arr1_prefix), self.indent))
                 if action == ACTION_OUT:
@@ -1023,7 +1023,7 @@ class CFile(io.TextIOWrapper):
                             self.code("%s%s[i%i].resize(%s[i%i]);" \
                                       % (
                                       y_prefix, y.cname, self.indent - 1, y.arr2.code(y_arr2_prefix), self.indent - 1))
-                        self.code( \
+                        self.code(
                             "for (unsigned int i%i = 0; i%i < %s[i%i]; i%i++) {" \
                             % (self.indent, self.indent, y.arr2.code(y_arr2_prefix), self.indent - 1, self.indent))
                     z = "%s%s[i%i][i%i]" % (y_prefix, y.cname, self.indent - 2, self.indent - 1)
